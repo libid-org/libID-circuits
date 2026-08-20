@@ -24,37 +24,15 @@ global MAX_EXP_DIGITS: u32 = 12; // unix timestamp fits in 10 digits until year 
 global ISS_PATTERN_LEN: u32 = 35; // length of `"iss":"https://accounts.google.com"`
 global AUD_PREFIX_LEN: u32 = 7; // length of `"aud":"`
 
-global B64URL_ALPHABET: [u8; 64] = [
-    65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88,
-    89, 90, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114,
-    115, 116, 117, 118, 119, 120, 121, 122, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 45, 95,
-];
-
 // Encode the 32-byte Authorization Digest the way REQ-PLAT-10 requires the
 // runtime to place it in the OIDC `nonce`: base64url, no padding, 43 chars.
 //
 // The circuit encodes rather than decodes. Both bind the same pair, and
 // encoding is the cheaper direction: 32 bytes are 10 whole three-byte groups
-// plus a two-byte tail, so the output is fixed at 43 characters with no
-// padding branch to constrain.
+// plus a two-byte tail, so `noir_base64`'s length formula fixes the output at
+// 43 characters with no padding branch to constrain.
 fn b64url_encode_digest(d: [u8; DIGEST_LEN]) -> [u8; NONCE_B64_LEN] {
-    let mut out: [u8; NONCE_B64_LEN] = [0; NONCE_B64_LEN];
-    for g in 0..10 {
-        let b0 = d[3 * g] as u32;
-        let b1 = d[3 * g + 1] as u32;
-        let b2 = d[3 * g + 2] as u32;
-        out[4 * g] = B64URL_ALPHABET[b0 >> 2];
-        out[4 * g + 1] = B64URL_ALPHABET[((b0 & 3) << 4) | (b1 >> 4)];
-        out[4 * g + 2] = B64URL_ALPHABET[((b1 & 15) << 2) | (b2 >> 6)];
-        out[4 * g + 3] = B64URL_ALPHABET[b2 & 63];
-    }
-    // Tail: the last two bytes make three characters, with no padding byte.
-    let t0 = d[30] as u32;
-    let t1 = d[31] as u32;
-    out[40] = B64URL_ALPHABET[t0 >> 2];
-    out[41] = B64URL_ALPHABET[((t0 & 3) << 4) | (t1 >> 4)];
-    out[42] = B64URL_ALPHABET[(t1 & 15) << 2];
-    out
+    BASE64_URL_ENCODER::encode(d)
 }
 
 // Length of base64url-encoded output (no padding) for `input_len` bytes of input.
@@ -355,14 +333,38 @@ fn nonce_encoding_separates_distinct_digests() {
 }
 
 #[test]
-fn nonce_encoding_uses_the_url_alphabet() {
-    // An all-ones digest exercises the two characters that separate base64url
-    // from base64: `-` and `_` stand where `+` and `/` would.
-    let d: [u8; DIGEST_LEN] = [0xff; DIGEST_LEN];
-    let got = b64url_encode_digest(d);
+fn nonce_encoding_matches_external_vectors() {
+    // Computed with Python `base64.urlsafe_b64encode(...).rstrip(b"=")`, so
+    // this checks `noir_base64` against an oracle outside the Noir ecosystem
+    // rather than against itself. The all-ones case is the sharp one: it ends
+    // in `8`, not `_`, because a two-byte tail forces the final character's low
+    // two bits to zero. An encoder that emitted a fourth tail character, or
+    // padding, would fail here.
+    let zeros: [u8; DIGEST_LEN] = [0; DIGEST_LEN];
+    let zeros_expected: [u8; NONCE_B64_LEN] = [65; NONCE_B64_LEN]; // "AAA..."
+    let got = b64url_encode_digest(zeros);
     for i in 0..NONCE_B64_LEN {
-        assert(got[i] != 43, "encoder emitted `+`, not base64url");
-        assert(got[i] != 47, "encoder emitted `/`, not base64url");
-        assert(got[i] != 61, "encoder emitted padding");
+        assert(got[i] == zeros_expected[i], "zero digest encoded wrong");
+    }
+
+    let ones: [u8; DIGEST_LEN] = [255; DIGEST_LEN];
+    let got = b64url_encode_digest(ones);
+    for i in 0..42 {
+        assert(got[i] == 95, "expected `_` across the body of the all-ones digest");
+    }
+    assert(got[42] == 56, "two-byte tail must end in `8`, not `_`");
+
+    let mut counting: [u8; DIGEST_LEN] = [0; DIGEST_LEN];
+    for i in 0..DIGEST_LEN {
+        counting[i] = i as u8;
+    }
+    // "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8"
+    let counting_expected: [u8; NONCE_B64_LEN] = [
+        65, 65, 69, 67, 65, 119, 81, 70, 66, 103, 99, 73, 67, 81, 111, 76, 68, 65, 48, 79, 68, 120,
+        65, 82, 69, 104, 77, 85, 70, 82, 89, 88, 71, 66, 107, 97, 71, 120, 119, 100, 72, 104, 56,
+    ];
+    let got = b64url_encode_digest(counting);
+    for i in 0..NONCE_B64_LEN {
+        assert(got[i] == counting_expected[i], "counting digest encoded wrong");
     }
 }
