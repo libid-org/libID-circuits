@@ -25,17 +25,17 @@ deliberate future change so provenance stays byte-checkable).
 `toolchain.env` is the single source of truth:
 
 ```
-NARGO_VERSION=1.0.0-beta.20
-BB_VERSION=5.0.0-nightly.20260324
+NARGO_VERSION=1.0.0-beta.25
+BB_VERSION=5.2.0
 ```
 
 Install exactly those:
 
 ```sh
 curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash
-noirup --version 1.0.0-beta.20
+noirup --version 1.0.0-beta.25
 curl -L https://raw.githubusercontent.com/AztecProtocol/aztec-packages/master/barretenberg/bbup/install | bash
-bbup --version 5.0.0-nightly.20260324
+bbup --version 5.2.0
 ```
 
 The pins matter because the whole chain is deterministic in the toolchain:
