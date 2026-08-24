@@ -25,17 +25,17 @@ from there on.
 `toolchain.env` is the single source of truth:
 
 ```
-NARGO_VERSION=1.0.0-beta.20
-BB_VERSION=5.0.0-nightly.20260324
+NARGO_VERSION=1.0.0-beta.25
+BB_VERSION=5.2.0
 ```
 
 Install exactly those:
 
 ```sh
 curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash
-noirup --version 1.0.0-beta.20
+noirup --version 1.0.0-beta.25
 curl -L https://raw.githubusercontent.com/AztecProtocol/aztec-packages/master/barretenberg/bbup/install | bash
-bbup --version 5.0.0-nightly.20260324
+bbup --version 5.2.0
 ```
 
 The pins matter because the whole chain is deterministic in the toolchain:
@@ -115,14 +115,16 @@ regenerates its verifiers from the vks (write_solidity_verifier + memory-safe
 rewrite + the contract rename), runs `forge fmt` over them, and byte-compares
 against what it committed.
 
-Verification keys under the pinned toolchain, for the release that drops
-`x-token`:
+Verification keys under the pinned toolchain (nargo 1.0.0-beta.25, bb 5.2.0),
+for the release that drops `x-token`:
 
 | Circuit | vk_hash |
 |---|---|
-| `bearer-link` | `0x02bbc194f5160b0918f408d0f67445b8882e86d76e58b3465637cb6bcb26818e` |
-| `oidc-google` | `0x24db903f725957f760b865b2c6f010da37d7c9397b800c21113fbd0388a5a69f` |
+| `bearer-link` | `0x1d161afb536683d31a3e426db0feaa30de8be89cc45510579f361266c20e078f` |
+| `oidc-google` | `0x1b50bbf6d8ea6efc7ecc2547c25b285511704a10d9247466e84045095d9c3f77` |
 
-The Google key is not the one this section cited before: that value predates
-the change binding the Google proof to the Authorization Digest, which
-rewrote the circuit's public inputs.
+The Google key has moved twice since the value this section cited before
+2026-08-12: once when the proof was bound to the Authorization Digest
+(REQ-PLAT-16B public inputs), and again with the REQ-COMMON-19 /
+REQ-COMMON-19D constraints below. The deployed verifier rolls with the next
+release.
