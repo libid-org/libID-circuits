@@ -43,6 +43,24 @@ fn b64_encoded_len(input_len: u32) -> u32 {
     chunks_full * 4 + extra
 }
 
+// REQ-COMMON-19 / REQ-COMMON-19D: every claim match must end at a JSON
+// structural byte -- `,` (44) or `}` (125). A claim-shaped substring sitting
+// inside a longer signed string value is followed by ordinary string
+// content, never a bare structural byte, so this is the assertion that
+// rejects such a partial match; without it, JSON escaping of attacker-typed
+// content is the only thing preventing one.
+fn assert_structural(byte: u8) {
+    assert((byte == 44) | (byte == 125), "claim not followed by ',' or '}'");
+}
+
+// REQ-COMMON-19D: a canonical decimal (`0|[1-9][0-9]*`) starts with '0'
+// only when it IS the single digit `0`. "0123" passes a bare digit-run
+// check and parses to the same u64 as "123" -- a second signed encoding of
+// one exp value, which the spec explicitly rejects.
+fn assert_no_leading_zero(first_digit: u8, len: u32) {
+    assert((len == 1) | (first_digit != 48), "leading zero in exp");
+}
+
 fn main(
     // ---- private inputs ----
     signing_input: [u8; SIGNING_INPUT_MAX],
@@ -126,6 +144,9 @@ fn main(
         }
     }
     assert(payload_json[email_offset + EMAIL_PREFIX_LEN + email_len] == 34); // closing `"`
+    assert_structural(
+        payload_json[email_offset + EMAIL_PREFIX_LEN + email_len + 1],
+    );
 
     // 5. Nonce substring at nonce_offset in payload_json.
     //    Pattern bytes: `"nonce":"` = [34, 110, 111, 110, 99, 101, 34, 58, 34]
@@ -146,6 +167,9 @@ fn main(
         );
     }
     assert(payload_json[nonce_offset + NONCE_PREFIX_LEN + NONCE_B64_LEN] == 34); // closing `"`
+    assert_structural(
+        payload_json[nonce_offset + NONCE_PREFIX_LEN + NONCE_B64_LEN + 1],
+    );
 
     // 5b. `sub` substring at sub_offset in payload_json - the immutable
     //     Google account id, revealed as a public input (mirrors email/nonce).
@@ -165,6 +189,7 @@ fn main(
         }
     }
     assert(payload_json[sub_offset + SUB_PREFIX_LEN + sub_len] == 34); // closing `"`
+    assert_structural(payload_json[sub_offset + SUB_PREFIX_LEN + sub_len + 1]);
 
     // 6. `email_verified`:true must be present in the payload.
     //    Pattern bytes: `"email_verified":true`
@@ -176,9 +201,7 @@ fn main(
     for i in 0..EMAIL_VERIFIED_LEN {
         assert(payload_json[email_verified_offset + i] == ev_pattern[i]);
     }
-    // Trailing byte must be `,` (44) or `}` (125): defends against partial match.
-    let ev_trailing = payload_json[email_verified_offset + EMAIL_VERIFIED_LEN];
-    assert((ev_trailing == 44) | (ev_trailing == 125));
+    assert_structural(payload_json[email_verified_offset + EMAIL_VERIFIED_LEN]);
 
     // 7. `exp` claim: parse digits, assert equals public `exp`.
     //    The contract is responsible for asserting `exp > block.timestamp` off-circuit.
@@ -196,8 +219,8 @@ fn main(
             parsed_exp = parsed_exp * 10 + digit_val;
         }
     }
-    let exp_trailing = payload_json[exp_offset + EXP_PREFIX_LEN + exp_len];
-    assert((exp_trailing == 44) | (exp_trailing == 125));
+    assert_structural(payload_json[exp_offset + EXP_PREFIX_LEN + exp_len]);
+    assert_no_leading_zero(payload_json[exp_offset + EXP_PREFIX_LEN], exp_len);
     assert(parsed_exp == exp);
     assert(exp_len > 0);
     assert(exp_len <= MAX_EXP_DIGITS);
@@ -215,6 +238,7 @@ fn main(
     for i in 0..ISS_PATTERN_LEN {
         assert(payload_json[iss_offset + i] == iss_pattern[i]);
     }
+    assert_structural(payload_json[iss_offset + ISS_PATTERN_LEN]);
 
     // 8b. Bind the variable `aud` claim to the supplied client id.
     let aud_prefix: [u8; 7] = [34, 97, 117, 100, 34, 58, 34]; // `"aud":"`
@@ -230,6 +254,7 @@ fn main(
         }
     }
     assert(payload_json[aud_offset + AUD_PREFIX_LEN + audience_len] == 34);
+    assert_structural(payload_json[aud_offset + AUD_PREFIX_LEN + audience_len + 1]);
 
     let computed_audience_hash: [u8; 32] = sha256_var(audience_bytes, audience_len);
     let mut audience_h0: Field = 0;
@@ -241,17 +266,19 @@ fn main(
     assert(audience_h0 == audience_hash[0]);
     assert(audience_h1 == audience_hash[1]);
 
-    // 9. Offset bounds: every claimed pattern must lie inside the real
-    //    payload_json (not in the zero-padded region the prover controls).
-    //    payload_json_len itself is bound by the base64 length check above,
-    //    so it cannot be inflated.
-    assert(email_offset + EMAIL_PREFIX_LEN + email_len + 1 <= payload_json_len);
-    assert(nonce_offset + NONCE_PREFIX_LEN + NONCE_B64_LEN + 1 <= payload_json_len);
-    assert(sub_offset + SUB_PREFIX_LEN + sub_len + 1 <= payload_json_len);
+    // 9. Offset bounds: every claimed pattern -- including its trailing
+    //    structural byte (REQ-COMMON-19B: the whole match, inside the
+    //    authenticated length) -- must lie inside the real payload_json, not
+    //    in the zero-padded region the prover controls. payload_json_len
+    //    itself is bound by the base64 length check above, so it cannot be
+    //    inflated.
+    assert(email_offset + EMAIL_PREFIX_LEN + email_len + 2 <= payload_json_len);
+    assert(nonce_offset + NONCE_PREFIX_LEN + NONCE_B64_LEN + 2 <= payload_json_len);
+    assert(sub_offset + SUB_PREFIX_LEN + sub_len + 2 <= payload_json_len);
     assert(email_verified_offset + EMAIL_VERIFIED_LEN + 1 <= payload_json_len);
     assert(exp_offset + EXP_PREFIX_LEN + exp_len + 1 <= payload_json_len);
-    assert(iss_offset + ISS_PATTERN_LEN <= payload_json_len);
-    assert(aud_offset + AUD_PREFIX_LEN + audience_len + 1 <= payload_json_len);
+    assert(iss_offset + ISS_PATTERN_LEN + 1 <= payload_json_len);
+    assert(aud_offset + AUD_PREFIX_LEN + audience_len + 2 <= payload_json_len);
     // Defense against offset 0 + underflow / starting before JSON: realistic
     // payloads always have `{` at index 0.
     assert(email_offset >= 1);
@@ -367,4 +394,60 @@ fn nonce_encoding_matches_external_vectors() {
     for i in 0..NONCE_B64_LEN {
         assert(got[i] == counting_expected[i], "counting digest encoded wrong");
     }
+}
+
+#[test]
+fn claim_followed_by_a_structural_byte_is_accepted() {
+    // Both legal continuations after a claim's closing quote: another member
+    // (`,`) and end of object (`}`). Indexed the way main() indexes the
+    // email claim: offset + prefix + value_len reaches the closing quote,
+    // one more reaches the structural byte.
+    let email_len = 7; // a@b.com
+    let mid = "{\"email\":\"a@b.com\",\"x\":1}".as_bytes();
+    assert(mid[1 + EMAIL_PREFIX_LEN + email_len] == 34);
+    assert_structural(mid[1 + EMAIL_PREFIX_LEN + email_len + 1]);
+    let last = "{\"email\":\"a@b.com\"}".as_bytes();
+    assert(last[1 + EMAIL_PREFIX_LEN + email_len] == 34);
+    assert_structural(last[1 + EMAIL_PREFIX_LEN + email_len + 1]);
+}
+
+#[test(should_fail_with = "claim not followed by ',' or '}'")]
+fn claim_shaped_substring_without_structural_byte_is_rejected() {
+    // The shape REQ-COMMON-19's trailing-byte rule exists to reject: bytes
+    // that match `"email":"<value>"` exactly but sit inside a longer signed
+    // string value, so the byte after the apparent closing quote is ordinary
+    // string content. Every check main() ran before this fix passes here --
+    // the delimiter, the value, the closing quote:
+    let payload = "{\"email\":\"a@b.com\" is my address}".as_bytes();
+    let email_offset = 1;
+    let email_len = 7; // a@b.com
+    let email_prefix: [u8; 9] = [34, 101, 109, 97, 105, 108, 34, 58, 34];
+    for i in 0..EMAIL_PREFIX_LEN {
+        assert(payload[email_offset + i] == email_prefix[i]);
+    }
+    assert(payload[email_offset + EMAIL_PREFIX_LEN + email_len] == 34);
+    // -- so the trailing structural byte (here: a space) must be what fails.
+    assert_structural(payload[email_offset + EMAIL_PREFIX_LEN + email_len + 1]);
+}
+
+#[test]
+fn canonical_exp_values_are_accepted() {
+    // A realistic ten-digit timestamp, and the lone `0` -- the one canonical
+    // value whose first digit is '0'.
+    let payload = "{\"exp\":1754000000}".as_bytes();
+    let exp_offset = 1;
+    assert_no_leading_zero(payload[exp_offset + EXP_PREFIX_LEN], 10);
+    let zero = "{\"exp\":0}".as_bytes();
+    assert_no_leading_zero(zero[exp_offset + EXP_PREFIX_LEN], 1);
+}
+
+#[test(should_fail_with = "leading zero in exp")]
+fn exp_with_a_leading_zero_is_rejected() {
+    // REQ-COMMON-19D: `0|[1-9][0-9]*`, leading-zero explicitly listed among
+    // the rejects. "01754000000" satisfies the digit-run and trailing-byte
+    // checks and parses to the same u64 as "1754000000" -- a second signed
+    // encoding of one exp value.
+    let payload = "{\"exp\":01754000000}".as_bytes();
+    let exp_offset = 1;
+    assert_no_leading_zero(payload[exp_offset + EXP_PREFIX_LEN], 11);
 }

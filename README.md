@@ -121,8 +121,10 @@ Verification keys under the pinned toolchain, for the release that drops
 | Circuit | vk_hash |
 |---|---|
 | `bearer-link` | `0x02bbc194f5160b0918f408d0f67445b8882e86d76e58b3465637cb6bcb26818e` |
-| `oidc-google` | `0x24db903f725957f760b865b2c6f010da37d7c9397b800c21113fbd0388a5a69f` |
+| `oidc-google` | `0x1596b4295a9471df3d620bb3a94c970dd695a0617117ed4d0c9190ad2af7a27c` |
 
-The Google key is not the one this section cited before: that value predates
-the change binding the Google proof to the Authorization Digest, which
-rewrote the circuit's public inputs.
+The Google key has moved twice since the value this section cited before
+2026-08-12: once when the proof was bound to the Authorization Digest
+(REQ-PLAT-16B public inputs), and again with the REQ-COMMON-19 /
+REQ-COMMON-19D constraints below. The deployed verifier rolls with the next
+release.
