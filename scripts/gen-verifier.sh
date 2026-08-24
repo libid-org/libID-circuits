@@ -4,7 +4,7 @@
 #
 #   scripts/gen-verifier.sh <circuit> <out.sol> [--contract-name X]
 #
-#   <circuit>          directory name under artifacts/ (e.g. jwt_email,
+#   <circuit>          directory name under artifacts/ (e.g. oidc-google,
 #                      x-token)
 #   <out.sol>          output path for the Solidity source
 #   --contract-name X  rename the concrete verifier contract from bb's fixed

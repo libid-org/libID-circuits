@@ -12,7 +12,8 @@ release workflow under the pinned toolchain.
 
 | Circuit | Package | Proves |
 |---|---|---|
-| `circuits/jwt_email` | `jwt_email` | Possession of a Google OIDC JWT: verifies the RSA signature over the JWT and exposes the claims the login registry needs, without revealing the token. Source of the `HonkVerifier` in libid-contracts `solidity/contracts/login/oidc/Verifier.sol`. |
+| `circuits/bearer-link` | `bearer_link` | One hidden OAuth bearer opens both of a ceremony's blinded commitments — the token session's and the identity session's. Exactly two public inputs and nothing else: the credential never leaves the circuit, and the two sessions are tied together without publishing anything that identifies them. Serves X and GitHub, whose statements are byte-identical. |
+| `circuits/oidc-google` | `oidc_google` | Possession of a Google OIDC JWT: verifies the RSASSA-PKCS1-v1_5 signature over `header.payload` and exposes the Authorization Digest carried in `nonce`, `SHA256(aud)`, `sub`, the raw `email` bytes, `exp`, and the modulus that verified. The Platform Verifier alone decides whether that modulus is trusted. |
 | `circuits/x-token` | `x_token` | An X (Twitter) OAuth bearer token binds two TLSN hash commitments: the same private bearer SHA-256-hashes to both notary commitments (`/token` and `/me`), plus a blinder-independent keccak nullifier for one-shot on-chain dedup per real bearer. Source of the `XHonkVerifier` in libid-contracts `solidity/contracts/login/zk/XHonkVerifier.sol`. |
 
 Sources were extracted byte-verbatim from the original monorepo and then
@@ -81,7 +82,7 @@ local build from the same sources.
 ## Generating a Solidity verifier
 
 ```sh
-scripts/gen-verifier.sh jwt_email Verifier.sol
+scripts/gen-verifier.sh oidc-google Verifier.sol
 scripts/gen-verifier.sh x-token XHonkVerifier.sol --contract-name XHonkVerifier
 ```
 
@@ -116,4 +117,4 @@ memory-safe rewrite + `XHonkVerifier` rename), runs `forge fmt` over them,
 and byte-compares against its committed `Verifier.sol` and
 `XHonkVerifier.sol`. Reproducibility verified 2026-08-12: with the pinned
 toolchain, both committed verifiers reproduce byte-identically from these
-sources (jwt_email vk_hash `0x1a1fad94…d7d6ba08`).
+sources (oidc-google vk_hash `0x1a1fad94…d7d6ba08`).
