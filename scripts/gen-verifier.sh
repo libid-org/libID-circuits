@@ -5,12 +5,12 @@
 #   scripts/gen-verifier.sh <circuit> <out.sol> [--contract-name X]
 #
 #   <circuit>          directory name under artifacts/ (e.g. oidc-google,
-#                      x-token)
+#                      bearer-link)
 #   <out.sol>          output path for the Solidity source
 #   --contract-name X  rename the concrete verifier contract from bb's fixed
-#                      `HonkVerifier` to X (e.g. XHonkVerifier — needed when a
-#                      consumer compiles two bb verifiers in one project and
-#                      the names would collide)
+#                      `HonkVerifier` to X (e.g. BearerLinkHonkVerifier —
+#                      needed when a consumer compiles two bb verifiers in one
+#                      project and the names would collide)
 #
 # Canonical post-processing (matches what the committed libid-contracts
 # verifiers were built with):
