@@ -14,7 +14,6 @@ release workflow under the pinned toolchain.
 |---|---|---|
 | `circuits/bearer-link` | `bearer_link` | One hidden OAuth bearer opens both of a ceremony's blinded commitments — the token session's and the identity session's. Exactly two public inputs and nothing else: the credential never leaves the circuit, and the two sessions are tied together without publishing anything that identifies them. Serves X and GitHub, whose statements are byte-identical. |
 | `circuits/oidc-google` | `oidc_google` | Possession of a Google OIDC JWT: verifies the RSASSA-PKCS1-v1_5 signature over `header.payload` and exposes the Authorization Digest carried in `nonce`, `SHA256(aud)`, `sub`, the raw `email` bytes, `exp`, and the modulus that verified. The Platform Verifier alone decides whether that modulus is trusted. |
-| `circuits/x-token` | `x_token` | An X (Twitter) OAuth bearer token binds two TLSN hash commitments: the same private bearer SHA-256-hashes to both notary commitments (`/token` and `/me`), plus a blinder-independent keccak nullifier for one-shot on-chain dedup per real bearer. Source of the `XHonkVerifier` in libid-contracts `solidity/contracts/login/zk/XHonkVerifier.sol`. |
 
 Sources were extracted byte-verbatim from the original monorepo and then
 formatted once with `nargo fmt` (verified to leave the vk byte-identical;
@@ -83,7 +82,8 @@ local build from the same sources.
 
 ```sh
 scripts/gen-verifier.sh oidc-google Verifier.sol
-scripts/gen-verifier.sh x-token XHonkVerifier.sol --contract-name XHonkVerifier
+scripts/gen-verifier.sh bearer-link BearerLinkHonkVerifier.sol \
+  --contract-name BearerLinkHonkVerifier
 ```
 
 This runs `bb write_solidity_verifier` on the locally built vk (run
@@ -91,8 +91,7 @@ This runs `bb write_solidity_verifier` on the locally built vk (run
 canonical post-processing: every `assembly {` becomes
 `assembly ("memory-safe") {` (required by via_ir consumers), plus the
 optional contract rename (bb always names the concrete contract
-`HonkVerifier`; a consumer compiling both verifiers needs distinct names,
-hence `XHonkVerifier`). **`forge fmt` is deliberately not run here** — this
+`HonkVerifier`; a consumer compiling both verifiers needs distinct names). **`forge fmt` is deliberately not run here** — this
 repo carries no Foundry toolchain; the consumer formats the output under its
 own `foundry.toml` before diffing or committing, which is exactly what
 libid-contracts does.
@@ -109,12 +108,21 @@ source with the pinned toolchain (`scripts/build.sh`) and attaches:
 
 ## How consumers verify (the libid-contracts flow)
 
-libid-contracts pins a release tag of this repo. Its CI downloads the two
+libid-contracts pins a release tag of this repo. Its CI downloads the
 tarballs plus `manifest.json` from that release, checks the tarballs against
 the manifest's sha256s, installs the bb version the manifest names,
-regenerates both verifiers from the vks (write_solidity_verifier +
-memory-safe rewrite + `XHonkVerifier` rename), runs `forge fmt` over them,
-and byte-compares against its committed `Verifier.sol` and
-`XHonkVerifier.sol`. Reproducibility verified 2026-08-12: with the pinned
-toolchain, both committed verifiers reproduce byte-identically from these
-sources (oidc-google vk_hash `0x1a1fad94…d7d6ba08`).
+regenerates its verifiers from the vks (write_solidity_verifier + memory-safe
+rewrite + the contract rename), runs `forge fmt` over them, and byte-compares
+against what it committed.
+
+Verification keys under the pinned toolchain, for the release that drops
+`x-token`:
+
+| Circuit | vk_hash |
+|---|---|
+| `bearer-link` | `0x02bbc194f5160b0918f408d0f67445b8882e86d76e58b3465637cb6bcb26818e` |
+| `oidc-google` | `0x24db903f725957f760b865b2c6f010da37d7c9397b800c21113fbd0388a5a69f` |
+
+The Google key is not the one this section cited before: that value predates
+the change binding the Google proof to the Authorization Digest, which
+rewrote the circuit's public inputs.

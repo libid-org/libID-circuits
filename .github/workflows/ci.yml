@@ -101,7 +101,7 @@ jobs:
       - name: shellcheck
         run: shellcheck scripts/*.sh
 
-      # bearer_link has 12, x_token 9, oidc_google 3.
+      # bearer_link has 12, oidc_google 3.
       - name: nargo test
         run: |
           set -euo pipefail
