@@ -1,7 +1,7 @@
 name: CI
 
 # Two jobs. `circuits` proves that the committed sources build under the
-# pinned toolchain: tests pass, both circuits compile, and every vk
+# pinned toolchain: tests pass, every circuit compiles, and every vk
 # generates. Nothing built here is kept — artifacts are never committed and
 # ship exclusively as release assets, rebuilt from source by release.yml.
 # `dco` checks the Signed-off-by trailer CONTRIBUTING.md promises.
@@ -101,7 +101,7 @@ jobs:
       - name: shellcheck
         run: shellcheck scripts/*.sh
 
-      # jwt_email has no tests and passes vacuously; x_token has 9.
+      # bearer_link has 12, x_token 9, oidc_google 3.
       - name: nargo test
         run: |
           set -euo pipefail
@@ -110,7 +110,7 @@ jobs:
             (cd "$dir" && nargo test)
           done
 
-      # Full build: proves both circuits compile and every vk generates with
+      # Full build: proves every circuit compiles and every vk generates with
       # the pinned toolchain — the exact path release.yml runs to produce the
       # release assets. The output is discarded; artifacts only ever ship
       # from a release build.

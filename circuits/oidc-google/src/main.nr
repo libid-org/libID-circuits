@@ -9,7 +9,8 @@ global SIGNING_INPUT_MAX: u32 = 1280;
 global PAYLOAD_JSON_MAX: u32 = 768; // must be divisible by 3 (encoder output size formula).
 global PAYLOAD_B64_MAX: u32 = 1024; // = 4 * (PAYLOAD_JSON_MAX / 3) when divisible by 3
 global EMAIL_MAX: u32 = 62; // 2 packed Fields x 31 bytes
-global NONCE_MAX: u32 = 62;
+global DIGEST_LEN: u32 = 32; // Authorization Digest, common REQ-COMMON-01
+global NONCE_B64_LEN: u32 = 43; // BASE64URL_NOPAD(32 bytes)
 global SUB_MAX: u32 = 31; // 1 packed Field x 31 bytes (Google `sub` is ~21 digits)
 global AUDIENCE_MAX: u32 = 128;
 global NUM_LIMBS: u32 = 18;
@@ -22,6 +23,17 @@ global EXP_PREFIX_LEN: u32 = 6; // length of `"exp":`
 global MAX_EXP_DIGITS: u32 = 12; // unix timestamp fits in 10 digits until year 2286
 global ISS_PATTERN_LEN: u32 = 35; // length of `"iss":"https://accounts.google.com"`
 global AUD_PREFIX_LEN: u32 = 7; // length of `"aud":"`
+
+// Encode the 32-byte Authorization Digest the way REQ-PLAT-10 requires the
+// runtime to place it in the OIDC `nonce`: base64url, no padding, 43 chars.
+//
+// The circuit encodes rather than decodes. Both bind the same pair, and
+// encoding is the cheaper direction: 32 bytes are 10 whole three-byte groups
+// plus a two-byte tail, so `noir_base64`'s length formula fixes the output at
+// 43 characters with no padding branch to constrain.
+fn b64url_encode_digest(d: [u8; DIGEST_LEN]) -> [u8; NONCE_B64_LEN] {
+    BASE64_URL_ENCODER::encode(d)
+}
 
 // Length of base64url-encoded output (no padding) for `input_len` bytes of input.
 fn b64_encoded_len(input_len: u32) -> u32 {
@@ -48,8 +60,6 @@ fn main(
     aud_offset: u32,
     email_bytes: [u8; EMAIL_MAX],
     email_len: u32,
-    nonce_bytes: [u8; NONCE_MAX],
-    nonce_len: u32,
     sub_bytes: [u8; SUB_MAX],
     sub_len: u32,
     audience_bytes: [u8; AUDIENCE_MAX],
@@ -57,19 +67,16 @@ fn main(
     signature: [u128; NUM_LIMBS],
     redc: [u128; NUM_LIMBS],
     // ---- public inputs ----
-    modulus: pub [u128; NUM_LIMBS],
-    email_packed: pub [Field; 2],
-    nonce_packed: pub [Field; 2],
-    sub_packed: pub [Field; 1],
-    exp: pub u64,
+    // Exactly the public inputs REQ-PLAT-16B fixes, in the order it lists.
+    // The Authorization Digest binds the operation, chain and verifier
+    // version, which is why no chain id or registry address appears here.
+    authorization_digest: pub [u8; DIGEST_LEN],
     // Full SHA-256(client_id), packed as two big-endian 16-byte Fields.
     audience_hash: pub [Field; 2],
-    // Deployment binding (pass-through pub inputs, like the X circuit's
-    // wallet_address). The verifier asserts chain_id == block.chainid and
-    // registry_addr == msg.sender, scoping a proof to one (chain, Registry)
-    // so it can't be replayed against another deployment sharing the VK.
-    chain_id: pub Field,
-    registry_addr: pub Field,
+    sub_packed: pub [Field; 1],
+    email_packed: pub [Field; 2],
+    exp: pub u64,
+    modulus: pub [u128; NUM_LIMBS],
 ) {
     // 1. Hash the JWT signing input (header_b64 . payload_b64).
     let hash: [u8; 32] = sha256_var(signing_input, signing_input_len);
@@ -126,17 +133,19 @@ fn main(
     for i in 0..NONCE_PREFIX_LEN {
         assert(payload_json[nonce_offset + i] == nonce_prefix[i]);
     }
-    for i in 0..NONCE_MAX {
-        if i < nonce_len {
-            assert(payload_json[nonce_offset + NONCE_PREFIX_LEN + i] == nonce_bytes[i]);
-            // Same quote-exclusion as email: no interior `"` in the nonce.
-            assert(nonce_bytes[i] != 34);
-        } else {
-            // Same as email: zero the padding so nonce_packed is canonical.
-            assert(nonce_bytes[i] == 0);
-        }
+    // REQ-PLAT-18: the signed nonce IS the Authorization Digest. The digest
+    // is a public input and the nonce is its base64url encoding, so the two
+    // are bound by re-encoding the digest and comparing byte for byte. The
+    // length is fixed at 43, which leaves the prover no room to witness a
+    // longer nonce and hide bytes in it.
+    let expected_nonce = b64url_encode_digest(authorization_digest);
+    for i in 0..NONCE_B64_LEN {
+        assert(
+            payload_json[nonce_offset + NONCE_PREFIX_LEN + i] == expected_nonce[i],
+            "nonce does not encode the authorization digest",
+        );
     }
-    assert(payload_json[nonce_offset + NONCE_PREFIX_LEN + nonce_len] == 34); // closing `"`
+    assert(payload_json[nonce_offset + NONCE_PREFIX_LEN + NONCE_B64_LEN] == 34); // closing `"`
 
     // 5b. `sub` substring at sub_offset in payload_json - the immutable
     //     Google account id, revealed as a public input (mirrors email/nonce).
@@ -237,7 +246,7 @@ fn main(
     //    payload_json_len itself is bound by the base64 length check above,
     //    so it cannot be inflated.
     assert(email_offset + EMAIL_PREFIX_LEN + email_len + 1 <= payload_json_len);
-    assert(nonce_offset + NONCE_PREFIX_LEN + nonce_len + 1 <= payload_json_len);
+    assert(nonce_offset + NONCE_PREFIX_LEN + NONCE_B64_LEN + 1 <= payload_json_len);
     assert(sub_offset + SUB_PREFIX_LEN + sub_len + 1 <= payload_json_len);
     assert(email_verified_offset + EMAIL_VERIFIED_LEN + 1 <= payload_json_len);
     assert(exp_offset + EXP_PREFIX_LEN + exp_len + 1 <= payload_json_len);
@@ -253,39 +262,109 @@ fn main(
     assert(iss_offset >= 1);
     assert(aud_offset >= 1);
 
-    // 9. Pack email_bytes / nonce_bytes (62 bytes each, zero-padded past the
-    //    real length) into [Field; 2] each, big-endian, 31 bytes per Field.
+    // 9. Pack email_bytes (62 bytes, zero-padded past the real length) into
+    //    [Field; 2], big-endian, 31 bytes per Field, and sub_bytes into one.
     //    Assert the public-input packed values match. The contract reverses
     //    this: takes the user-supplied plaintext, zero-pads to 62, packs the
     //    same way, compares.
     let mut email_f0: Field = 0;
     let mut email_f1: Field = 0;
-    let mut nonce_f0: Field = 0;
-    let mut nonce_f1: Field = 0;
     let mut sub_f0: Field = 0;
     for i in 0..31 {
         email_f0 = email_f0 * 256 + email_bytes[i] as Field;
         email_f1 = email_f1 * 256 + email_bytes[i + 31] as Field;
-        nonce_f0 = nonce_f0 * 256 + nonce_bytes[i] as Field;
-        nonce_f1 = nonce_f1 * 256 + nonce_bytes[i + 31] as Field;
         sub_f0 = sub_f0 * 256 + sub_bytes[i] as Field;
     }
     assert(email_f0 == email_packed[0]);
     assert(email_f1 == email_packed[1]);
-    assert(nonce_f0 == nonce_packed[0]);
-    assert(nonce_f1 == nonce_packed[1]);
     assert(sub_f0 == sub_packed[0]);
 
     // 10. Type bounds.
     assert(signing_input_len <= SIGNING_INPUT_MAX);
     assert(payload_json_len <= PAYLOAD_JSON_MAX);
     assert(email_len <= EMAIL_MAX);
-    assert(nonce_len <= NONCE_MAX);
     assert(sub_len <= SUB_MAX);
     assert(audience_len > 0);
     assert(audience_len <= AUDIENCE_MAX);
+}
 
-    // Pass-through: bound by the proof, checked on-chain (not constrained here).
-    let _ = chain_id;
-    let _ = registry_addr;
+// --- Tests ----------------------------------------------------------------
+
+#[test]
+fn nonce_encoding_matches_the_published_vector() {
+    // The Authorization Digest and Google nonce published together in
+    // platform-ceremonies.md section 3.1, which is itself the digest of the
+    // conformance vector in ceremony-common.md section 5. Getting both from
+    // the specification rather than from this circuit is what makes the test
+    // a check instead of a mirror.
+    let digest: [u8; DIGEST_LEN] = [
+        0xb3, 0x18, 0xfb, 0x55, 0x9e, 0x16, 0xa1, 0x79, 0xb8, 0x53, 0xed, 0x28, 0x53, 0x57, 0x6c,
+        0xda, 0x16, 0x03, 0x2d, 0x93, 0xb0, 0x83, 0x9b, 0xb8, 0x1a, 0x55, 0x13, 0x5d, 0x33, 0x4c,
+        0x0a, 0xf5,
+    ];
+    // "sxj7VZ4WoXm4U-0oU1ds2hYDLZOwg5u4GlUTXTNMCvU"
+    let expected: [u8; NONCE_B64_LEN] = [
+        115, 120, 106, 55, 86, 90, 52, 87, 111, 88, 109, 52, 85, 45, 48, 111, 85, 49, 100, 115, 50,
+        104, 89, 68, 76, 90, 79, 119, 103, 53, 117, 52, 71, 108, 85, 84, 88, 84, 78, 77, 67, 118,
+        85,
+    ];
+    let got = b64url_encode_digest(digest);
+    for i in 0..NONCE_B64_LEN {
+        assert(got[i] == expected[i], "nonce encoding disagrees with the published vector");
+    }
+}
+
+#[test]
+fn nonce_encoding_separates_distinct_digests() {
+    let a: [u8; DIGEST_LEN] = [0; DIGEST_LEN];
+    let mut b: [u8; DIGEST_LEN] = [0; DIGEST_LEN];
+    // Differ in the final byte, which only the tail characters cover -- the
+    // case a group-only encoder would miss.
+    b[31] = 1;
+    let ea = b64url_encode_digest(a);
+    let eb = b64url_encode_digest(b);
+    let mut differs = false;
+    for i in 0..NONCE_B64_LEN {
+        if ea[i] != eb[i] {
+            differs = true;
+        }
+    }
+    assert(differs, "two digests encoded to one nonce");
+}
+
+#[test]
+fn nonce_encoding_matches_external_vectors() {
+    // Computed with Python `base64.urlsafe_b64encode(...).rstrip(b"=")`, so
+    // this checks `noir_base64` against an oracle outside the Noir ecosystem
+    // rather than against itself. The all-ones case is the sharp one: it ends
+    // in `8`, not `_`, because a two-byte tail forces the final character's low
+    // two bits to zero. An encoder that emitted a fourth tail character, or
+    // padding, would fail here.
+    let zeros: [u8; DIGEST_LEN] = [0; DIGEST_LEN];
+    let zeros_expected: [u8; NONCE_B64_LEN] = [65; NONCE_B64_LEN]; // "AAA..."
+    let got = b64url_encode_digest(zeros);
+    for i in 0..NONCE_B64_LEN {
+        assert(got[i] == zeros_expected[i], "zero digest encoded wrong");
+    }
+
+    let ones: [u8; DIGEST_LEN] = [255; DIGEST_LEN];
+    let got = b64url_encode_digest(ones);
+    for i in 0..42 {
+        assert(got[i] == 95, "expected `_` across the body of the all-ones digest");
+    }
+    assert(got[42] == 56, "two-byte tail must end in `8`, not `_`");
+
+    let mut counting: [u8; DIGEST_LEN] = [0; DIGEST_LEN];
+    for i in 0..DIGEST_LEN {
+        counting[i] = i as u8;
+    }
+    // "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8"
+    let counting_expected: [u8; NONCE_B64_LEN] = [
+        65, 65, 69, 67, 65, 119, 81, 70, 66, 103, 99, 73, 67, 81, 111, 76, 68, 65, 48, 79, 68, 120,
+        65, 82, 69, 104, 77, 85, 70, 82, 89, 88, 71, 66, 107, 97, 71, 120, 119, 100, 72, 104, 56,
+    ];
+    let got = b64url_encode_digest(counting);
+    for i in 0..NONCE_B64_LEN {
+        assert(got[i] == counting_expected[i], "counting digest encoded wrong");
+    }
 }

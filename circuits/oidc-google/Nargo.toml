@@ -1,5 +1,5 @@
 [package]
-name = "jwt_email"
+name = "oidc_google"
 type = "bin"
 authors = [""]
 compiler_version = ">=1.0.0"
