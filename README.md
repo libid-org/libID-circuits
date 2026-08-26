@@ -8,6 +8,13 @@ release workflow under the pinned toolchain.
 
 [libid-contracts]: https://github.com/libid-org/libid-contracts
 
+libID does not implement its own zero-knowledge language or proving system.
+These circuits use [Noir](https://noir-lang.org/) with Aztec's
+[Barretenberg](https://github.com/AztecProtocol/aztec-packages/tree/next/barretenberg)
+proving backend. We are grateful to the Aztec team for developing and sharing
+this stack as a public good, especially for its excellent browser proving
+support, which fits libID's client-side proving use case almost perfectly.
+
 ## The circuits
 
 | Circuit | Package | Proves |
