@@ -1,9 +1,10 @@
 name: CI
 
 # Two jobs. `circuits` proves that the committed sources build under the
-# pinned toolchain: tests pass, every circuit compiles, and every vk
-# generates. Nothing built here is kept — artifacts are never committed and
-# ship exclusively as release assets, rebuilt from source by release.yml.
+# pinned toolchain: tests pass, every circuit compiles, every vk generates,
+# and every Solidity verifier generates under its pinned contract name.
+# Nothing built here is kept — artifacts are never committed and ship
+# exclusively as release assets, rebuilt from source by release.yml.
 # `dco` checks the Signed-off-by trailer CONTRIBUTING.md promises.
 #
 # Every third-party action is pinned by commit SHA, with the tag in a
@@ -110,10 +111,12 @@ jobs:
             (cd "$dir" && nargo test)
           done
 
-      # Full build: proves every circuit compiles and every vk generates with
+      # Full build: proves every circuit compiles, every vk generates, and
+      # every Solidity verifier generates under its pinned contract name with
       # the pinned toolchain — the exact path release.yml runs to produce the
-      # release assets. The output is discarded; artifacts only ever ship
-      # from a release build.
+      # release assets, so a release cannot break on a step no PR exercised.
+      # The output is discarded; artifacts only ever ship from a release
+      # build.
       - name: Build artifacts (discarded)
         run: |
           set -euo pipefail

@@ -1,10 +1,11 @@
 # libID circuits
 
 Noir zero-knowledge circuits for libID's login flows. The proving artifacts
-(ACIR + verification keys) that the on-chain Solidity verifiers in
-[libid-contracts] derive from, byte-for-byte, are **not committed** — they
+(ACIR + verification keys) and the Solidity verifiers derived from them,
+which [libid-contracts] compiles and deploys, are **not committed** — they
 ship exclusively as GitHub Release assets, rebuilt from these sources by the
-release workflow under the pinned toolchain.
+release workflow under the pinned toolchain. `bb` runs in this repo and
+nowhere else.
 
 [libid-contracts]: https://github.com/libid-org/libid-contracts
 
@@ -73,7 +74,12 @@ refuse to run under any other version.
   as produced);
 - `vk` — Barretenberg verification key
   (`bb write_vk --oracle_hash keccak`, keccak because the consumer is EVM);
-- `vk_hash` — its 32-byte hash.
+- `vk_hash` — its 32-byte hash;
+- `<Contract>.sol` — the EVM Solidity verifier
+  (`bb write_solidity_verifier` on the vk, plus the two rewrites described
+  under "Regenerating a Solidity verifier"), the concrete contract named
+  after the circuit directory: `bearer-link/BearerLinkHonkVerifier.sol`,
+  `oidc-google/OidcGoogleHonkVerifier.sol`.
 
 ```sh
 scripts/build.sh              # build into ./artifacts/ (requires the pinned toolchain)
@@ -85,23 +91,28 @@ produces identical bytes (the path normalization above removes the only
 machine-specific content), so a release built in CI is byte-identical to a
 local build from the same sources.
 
-## Generating a Solidity verifier
+## Regenerating a Solidity verifier
+
+`scripts/build.sh` writes every verifier. `scripts/gen-verifier.sh` is the
+step it runs per circuit, and regenerates one from a vk alone — no nargo —
+for example to byte-compare an unpacked release against a local `bb`:
 
 ```sh
-scripts/gen-verifier.sh oidc-google Verifier.sol
-scripts/gen-verifier.sh bearer-link BearerLinkHonkVerifier.sol \
-  --contract-name BearerLinkHonkVerifier
+scripts/gen-verifier.sh bearer-link                          # artifacts/bearer-link/BearerLinkHonkVerifier.sol
+scripts/gen-verifier.sh oidc-google --artifacts ~/unpacked   # from a downloaded release's vk
+scripts/gen-verifier.sh oidc-google Verifier.sol --contract-name HonkVerifier
 ```
 
-This runs `bb write_solidity_verifier` on the locally built vk (run
-`scripts/build.sh` first) and applies the
-canonical post-processing: every `assembly {` becomes
-`assembly ("memory-safe") {` (required by via_ir consumers), plus the
-optional contract rename (bb always names the concrete contract
-`HonkVerifier`; a consumer compiling both verifiers needs distinct names). **`forge fmt` is deliberately not run here** — this
-repo carries no Foundry toolchain; the consumer formats the output under its
-own `foundry.toml` before diffing or committing, which is exactly what
-libid-contracts does.
+The interchange format is raw `bb write_solidity_verifier` output plus
+exactly two rewrites: every `assembly {` becomes `assembly ("memory-safe") {`
+(required by via_ir consumers), and the concrete contract is renamed off
+bb's fixed `HonkVerifier` to `<Circuit>HonkVerifier` (both verifiers must
+compile in one project). The names the current circuits ship under are
+pinned in the script and checked on every run, so renaming a circuit
+directory fails the build instead of silently renaming the contract
+consumers compile. **`forge fmt` is deliberately not run here** — this repo
+carries no Foundry toolchain; the consumer formats the shipped file under
+its own `foundry.toml` before compiling or committing it.
 
 ## Releases
 
@@ -109,18 +120,17 @@ Publishing a GitHub Release tagged `v<version>` builds the artifacts from
 source with the pinned toolchain (`scripts/build.sh`) and attaches:
 
 - `libid-circuits-<version>-<circuit>.tar.gz` — one per circuit, containing
-  `<package>.json`, `vk`, `vk_hash`;
+  `<package>.json`, `vk`, `vk_hash`, `<Contract>.sol`;
 - `manifest.json` — `{version, tag, toolchain: {nargo, bb}, tarballs:
   {<tarball>: {sha256, files: {<name>: sha256}}}}`.
 
-## How consumers verify (the libid-contracts flow)
+## Consuming a release
 
-libid-contracts pins a release tag of this repo. Its CI downloads the
-tarballs plus `manifest.json` from that release, checks the tarballs against
-the manifest's sha256s, installs the bb version the manifest names,
-regenerates its verifiers from the vks (write_solidity_verifier + memory-safe
-rewrite + the contract rename), runs `forge fmt` over them, and byte-compares
-against what it committed.
+Pin a release tag. Download the circuit's tarball and `manifest.json`, check
+the tarball's sha256 against the manifest, unpack, check `<Contract>.sol`
+against its entry in `files`, run `forge fmt` over it under your own
+`foundry.toml`, and compile. No `bb`, no nargo: the verifier is derived
+here, once, by the toolchain the manifest names.
 
 Verification keys under the pinned toolchain (nargo 1.0.0-beta.25, bb 5.2.0),
 for the release that drops `x-token`:
