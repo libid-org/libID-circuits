@@ -5,7 +5,8 @@ name: Release
 # release:
 #
 #   libid-circuits-<version>-<circuit>.tar.gz   one per circuit, containing
-#                                               <package>.json, vk, vk_hash
+#                                               <package>.json, vk, vk_hash,
+#                                               <Contract>.sol
 #   manifest.json                               version, toolchain pins, and
 #                                               sha256 of every tarball and
 #                                               every file inside them
@@ -16,9 +17,12 @@ name: Release
 # machine-specific paths nargo embeds), so a re-run reproduces the same
 # bytes.
 #
-# Consumers (libid-contracts' `verifiers` CI job) download the tarballs by
-# pinned tag, check them against the manifest's sha256s, and regenerate their
-# Solidity verifiers from the vks with the bb version the manifest names.
+# bb runs here and nowhere else. The Solidity verifier derives from the vk
+# alone, so scripts/build.sh writes it next to the vk (bearer-link ->
+# BearerLinkHonkVerifier.sol) and it ships in the same tarball. Consumers
+# download by pinned tag, check the tarball and the .sol against the
+# manifest's sha256s, run `forge fmt` under their own foundry.toml, and
+# compile — no bb, no nargo downstream.
 #
 # Every third-party action is pinned by commit SHA, with the tag in a
 # comment, so a moved tag cannot change what executes.
@@ -84,7 +88,9 @@ jobs:
           [ "$(bb --version | tail -1)" = "${BB_VERSION}" ]
 
       # The build.sh toolchain gate re-checks the versions; a runner with the
-      # wrong toolchain fails here instead of shipping wrong bytes.
+      # wrong toolchain fails here instead of shipping wrong bytes. The
+      # Solidity verifiers are written into artifacts/<circuit>/ by the same
+      # script, so the packaging below ships and hashes them untouched.
       - name: Build artifacts from source
         run: ./scripts/build.sh --out artifacts
 
