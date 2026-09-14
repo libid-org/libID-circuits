@@ -15,10 +15,15 @@
 #                   (`bb write_vk --oracle_hash keccak` — keccak because the
 #                   consumer is an EVM Solidity verifier)
 #   vk_hash         32-byte hash of the vk, as written by the same command
+#   <Contract>.sol  the EVM Solidity verifier bb derives from the vk, with
+#                   the memory-safe rewrite applied and the concrete contract
+#                   named after the circuit (bearer-link ->
+#                   BearerLinkHonkVerifier); see scripts/gen-verifier.sh.
+#                   Ships so that consumers compile it and never run bb.
 #
 # The vk derives from the ACIR bytecode alone, and the Solidity verifier from
-# the vk alone — so these three files are the complete, sufficient input for
-# reproducing the on-chain verifiers (scripts/gen-verifier.sh).
+# the vk alone — so a release tarball is the complete, sufficient input for
+# reproducing every byte of the on-chain verifier.
 #
 # Path normalization: nargo embeds absolute source paths in the ACIR json's
 # file_map (used only for diagnostics; the bytecode, abi, debug_symbols and
@@ -97,6 +102,11 @@ for dir in "$ROOT"/circuits/*/; do
   mv "$vk_tmp/vk" "$OUT/$circuit/vk"
   mv "$vk_tmp/vk_hash" "$OUT/$circuit/vk_hash"
   rmdir "$vk_tmp"
+
+  # The Solidity verifier, next to the vk it derives from. gen-verifier.sh
+  # names the contract after the circuit directory and checks the pinned
+  # names, so a renamed directory fails here instead of at a consumer.
+  "$ROOT/scripts/gen-verifier.sh" "$circuit" --artifacts "$OUT"
 done
 
 echo "OK: artifacts written to $OUT"
