@@ -1,13 +1,13 @@
-# libID circuits
+# libID-circuits
 
 Noir zero-knowledge circuits for libID's login flows. The proving artifacts
 (ACIR + verification keys) and the Solidity verifiers derived from them,
-which [libid-contracts] compiles and deploys, are **not committed** — they
+which [libID-contracts] compiles and deploys, are **not committed** — they
 ship exclusively as GitHub Release assets, rebuilt from these sources by the
 release workflow under the pinned toolchain. `bb` runs in this repo and
 nowhere else.
 
-[libid-contracts]: https://github.com/libid-org/libid-contracts
+[libID-contracts]: https://github.com/libid-org/libID-contracts
 
 libID does not implement its own zero-knowledge language or proving system.
 These circuits use [Noir](https://noir-lang.org/) with Aztec's
