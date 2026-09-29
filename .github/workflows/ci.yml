@@ -109,6 +109,11 @@ jobs:
       - name: shellcheck
         run: shellcheck scripts/*.sh
 
+      # The oidc-google witness is generated: the committed file must be
+      # what the script writes.
+      - name: Generated witness is current
+        run: python3 scripts/oidc-google-witness.py --check
+
       # Every circuit carries its own #[test] fns in src/main.nr.
       - name: nargo test
         run: |

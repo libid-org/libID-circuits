@@ -150,6 +150,10 @@ Foundry (`forge`, `anvil`, `cast`) besides the pinned nargo and bb:
 scripts/build.sh && scripts/check-verifiers.sh
 ```
 
+`circuits/oidc-google/Prover.toml` is a Google-shaped ID token signed by a
+synthetic RSA-2048 key. `scripts/oidc-google-witness.py` writes it, and CI
+fails when the committed file differs from the script's output.
+
 ## Releases
 
 Publishing a GitHub Release tagged `v<version>` builds the artifacts from
