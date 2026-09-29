@@ -15,9 +15,8 @@
 #                   (`bb write_vk --oracle_hash keccak` — keccak because the
 #                   consumer is an EVM Solidity verifier)
 #   vk_hash         32-byte hash of the vk, as written by the same command
-#   <Contract>.sol  the EVM Solidity verifier bb derives from the vk, with
-#                   the memory-safe rewrite applied and the concrete contract
-#                   named after the circuit (bearer-link ->
+#   <Contract>.sol  the EVM Solidity verifier bb derives from the vk, the
+#                   contract named after the circuit (bearer-link ->
 #                   BearerLinkHonkVerifier); see scripts/gen-verifier.sh.
 #                   Ships so that consumers compile it and never run bb.
 #

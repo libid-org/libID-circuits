@@ -76,9 +76,9 @@ refuse to run under any other version.
   (`bb write_vk --oracle_hash keccak`, keccak because the consumer is EVM);
 - `vk_hash` — its 32-byte hash;
 - `<Contract>.sol` — the EVM Solidity verifier
-  (`bb write_solidity_verifier` on the vk, plus the two rewrites described
-  under "Regenerating a Solidity verifier"), the concrete contract named
-  after the circuit directory: `bearer-link/BearerLinkHonkVerifier.sol`,
+  (`bb write_solidity_verifier -t evm --optimized` on the vk, see
+  "Regenerating a Solidity verifier"), the contract named after the circuit
+  directory: `bearer-link/BearerLinkHonkVerifier.sol`,
   `oidc-google/OidcGoogleHonkVerifier.sol`.
 
 ```sh
@@ -103,16 +103,42 @@ scripts/gen-verifier.sh oidc-google --artifacts ~/unpacked   # from a downloaded
 scripts/gen-verifier.sh oidc-google Verifier.sol --contract-name HonkVerifier
 ```
 
+The verifier is bb's optimized template with zero knowledge (`-t evm
+--optimized`): one contract, `<Circuit>HonkVerifier is IVerifier`, deployed
+without linking. The Proving Circuit is zero-knowledge by specification, so
+the target is never `evm-no-zk`.
+
 The interchange format is raw `bb write_solidity_verifier` output plus
-exactly two rewrites: every `assembly {` becomes `assembly ("memory-safe") {`
-(required by via_ir consumers), and the concrete contract is renamed off
-bb's fixed `HonkVerifier` to `<Circuit>HonkVerifier` (both verifiers must
-compile in one project). The names the current circuits ship under are
-pinned in the script and checked on every run, so renaming a circuit
-directory fails the build instead of silently renaming the contract
-consumers compile. **`forge fmt` is deliberately not run here** — this repo
-carries no Foundry toolchain; the consumer formats the shipped file under
-its own `foundry.toml` before compiling or committing it.
+exactly one rewrite: the contract is renamed off bb's fixed `HonkVerifier`
+to `<Circuit>HonkVerifier` (both verifiers must compile in one project). The
+names the current circuits ship under are pinned in the script and checked
+on every run, so renaming a circuit directory fails the build instead of
+silently renaming the contract consumers compile. `forge fmt` is the
+consumer's: it formats the shipped file under its own `foundry.toml` before
+compiling it.
+
+## Compiling a verifier
+
+Compile the verifiers **without via_ir**, for EVM version `cancun` or later:
+
+- solc's IR pipeline cannot lay out the stack of the verifier's assembly
+  (solc 0.8.33: "Could not create stack layout after 1000 iterations"); the
+  legacy pipeline compiles it;
+- the assembly uses `MCOPY`, a Cancun opcode.
+
+The switch is solc's `--via-ir` (standard JSON `settings.viaIR`), Foundry's
+`via_ir`. A Foundry project that builds everything else via IR keeps it on
+and compiles only the verifiers on the legacy pipeline:
+
+```toml
+[profile.default]
+via_ir = true
+additional_compiler_profiles = [{ name = "verifiers", via_ir = false }]
+compilation_restrictions = [{ paths = "contracts/circuits/*HonkVerifier.sol", via_ir = false }]
+```
+
+Both fit EIP-170's runtime size limit on the legacy pipeline with the
+optimizer on.
 
 ## Releases
 
@@ -129,8 +155,9 @@ source with the pinned toolchain (`scripts/build.sh`) and attaches:
 Pin a release tag. Download the circuit's tarball and `manifest.json`, check
 the tarball's sha256 against the manifest, unpack, check `<Contract>.sol`
 against its entry in `files`, run `forge fmt` over it under your own
-`foundry.toml`, and compile. No `bb`, no nargo: the verifier is derived
-here, once, by the toolchain the manifest names.
+`foundry.toml`, and compile it without via_ir (see "Compiling a verifier").
+No `bb`, no nargo: the verifier is derived here, once, by the toolchain the
+manifest names.
 
 Verification keys under the pinned toolchain (nargo 1.0.0-beta.25, bb 5.2.0),
 for the release that drops `x-token`:
