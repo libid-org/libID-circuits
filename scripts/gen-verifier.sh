@@ -129,8 +129,12 @@ perl -i -pe "s/^contract HonkVerifier is IVerifier/contract ${contract_name} is 
 # the contract up by name and deploy it without linking, so a missed rename
 # or a library breaks them, not us.
 contracts="$(grep -c '^contract ' "$out" || true)"
-if [[ "$contracts" != 1 ]] || ! grep -q "^contract ${contract_name} is IVerifier" "$out"; then
-  echo "error: $out: expected exactly one contract, '${contract_name} is IVerifier', found $contracts." >&2
+if [[ "$contracts" != 1 ]]; then
+  echo "error: $out: expected one contract, found $contracts." >&2
+  exit 1
+fi
+if ! grep -q "^contract ${contract_name} is IVerifier" "$out"; then
+  echo "error: $out: its contract is not '${contract_name} is IVerifier'." >&2
   exit 1
 fi
 if grep -q '^library ' "$out"; then
