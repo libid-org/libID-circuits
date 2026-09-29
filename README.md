@@ -140,6 +140,16 @@ compilation_restrictions = [{ paths = "contracts/circuits/*HonkVerifier.sol", vi
 Both fit EIP-170's runtime size limit on the legacy pipeline with the
 optimizer on.
 
+`scripts/check-verifiers.sh` compiles every verifier that way, then proves
+each circuit's committed witness, `circuits/<circuit>/Prover.toml`: the
+proof must verify with `bb verify` and with the verifier deployed to anvil,
+and fail with one bit flipped. CI runs it after every build. It needs
+Foundry (`forge`, `anvil`, `cast`) besides the pinned nargo and bb:
+
+```sh
+scripts/build.sh && scripts/check-verifiers.sh
+```
+
 ## Releases
 
 Publishing a GitHub Release tagged `v<version>` builds the artifacts from
