@@ -21,7 +21,7 @@ support, which fits libID's client-side proving use case almost perfectly.
 | Circuit | Package | Proves |
 |---|---|---|
 | `circuits/bearer-link` | `bearer_link` | One hidden OAuth bearer opens both of a ceremony's blinded commitments — the token session's and the identity session's. Exactly two public inputs and nothing else: the credential never leaves the circuit, and the two sessions are tied together without publishing anything that identifies them. Serves X and GitHub, whose statements are byte-identical. |
-| `circuits/oidc-google` | `oidc_google` | Possession of a Google OIDC JWT: verifies the RSASSA-PKCS1-v1_5 signature over `header.payload` and exposes the Authorization Digest carried in `nonce`, `SHA256(aud)`, `sub`, the raw `email` bytes, `exp`, and the modulus that verified. The Platform Verifier alone decides whether that modulus is trusted. |
+| `circuits/oidc-google` | `oidc_google` | Possession of a Google OIDC JWT: verifies the RSASSA-PKCS1-v1_5 signature over `header.payload` and exposes the Authorization Digest carried in `nonce`, `SHA256(aud)`, the canonical `userId` `SHA256("libid.google-user-id" \|\| sub)` (the `sub` itself stays private), the raw `email` bytes, `exp`, and the modulus that verified. The Platform Verifier alone decides whether that modulus is trusted. |
 
 Sources were extracted byte-verbatim from the original monorepo and then
 formatted once with `nargo fmt` (verified to leave the vk byte-identical;
@@ -173,16 +173,17 @@ against its entry in `files`, run `forge fmt` over it under your own
 No `bb`, no nargo: the verifier is derived here, once, by the toolchain the
 manifest names.
 
-Verification keys under the pinned toolchain (nargo 1.0.0-beta.25, bb 5.2.0),
-for the release that drops `x-token`:
+Verification keys under the pinned toolchain (nargo 1.0.0-beta.25, bb 5.2.0):
 
 | Circuit | vk_hash |
 |---|---|
 | `bearer-link` | `0x1d161afb536683d31a3e426db0feaa30de8be89cc45510579f361266c20e078f` |
-| `oidc-google` | `0x1b50bbf6d8ea6efc7ecc2547c25b285511704a10d9247466e84045095d9c3f77` |
+| `oidc-google` | `0x29fdabfacc34aac98d8d44158c1f1ba51b3d97da24c82305908ea33bb18c585c` |
 
-The Google key has moved twice since the value this section cited before
+The Google key has moved three times since the value this section cited before
 2026-08-12: once when the proof was bound to the Authorization Digest
-(REQ-PLAT-16B public inputs), and again with the REQ-COMMON-19 /
-REQ-COMMON-19D constraints below. The deployed verifier rolls with the next
-release.
+(REQ-PLAT-16B public inputs), again with the REQ-COMMON-19 /
+REQ-COMMON-19D constraints below, and again when the proof started publishing
+the `userId` digest in place of the `sub` (v0.4.0 shipped
+`0x1b50bbf6d8ea6efc7ecc2547c25b285511704a10d9247466e84045095d9c3f77`). The
+deployed verifier rolls with the next release.

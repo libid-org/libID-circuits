@@ -11,7 +11,8 @@ global PAYLOAD_B64_MAX: u32 = 1024; // = 4 * (PAYLOAD_JSON_MAX / 3) when divisib
 global EMAIL_MAX: u32 = 62; // 2 packed Fields x 31 bytes
 global DIGEST_LEN: u32 = 32; // Authorization Digest, common REQ-COMMON-01
 global NONCE_B64_LEN: u32 = 43; // BASE64URL_NOPAD(32 bytes)
-global SUB_MAX: u32 = 31; // 1 packed Field x 31 bytes (Google `sub` is ~21 digits)
+global SUB_MAX: u32 = 31; // Google `sub` is ~21 digits; tag + 31 bytes fit one SHA-256 block
+global USER_ID_TAG_LEN: u32 = 20; // length of `libid.google-user-id`
 global AUDIENCE_MAX: u32 = 128;
 global NUM_LIMBS: u32 = 18;
 global MOD_BITS: u32 = 2048;
@@ -41,6 +42,41 @@ fn b64_encoded_len(input_len: u32) -> u32 {
     let tail = input_len - chunks_full * 3;
     let extra = if tail == 0 { 0 } else { tail + 1 };
     chunks_full * 4 + extra
+}
+
+// The canonical Google `userId` (platform-ceremonies section 2.1): SHA-256 of
+// the ASCII tag `libid.google-user-id` followed by the signed `sub`. The
+// digest is public and the `sub` is not. The tag keeps the digest apart from a
+// plain SHA-256 of the `sub` that another system may publish.
+fn user_id_digest(sub_bytes: [u8; SUB_MAX], sub_len: u32) -> [u8; 32] {
+    let tag: [u8; USER_ID_TAG_LEN] = "libid.google-user-id".as_bytes();
+    let mut preimage: [u8; USER_ID_TAG_LEN + SUB_MAX] = [0; USER_ID_TAG_LEN + SUB_MAX];
+    for i in 0..USER_ID_TAG_LEN {
+        preimage[i] = tag[i];
+    }
+    for i in 0..SUB_MAX {
+        preimage[USER_ID_TAG_LEN + i] = sub_bytes[i];
+    }
+    sha256_var(preimage, USER_ID_TAG_LEN + sub_len)
+}
+
+// A SHA-256 digest as two big-endian 16-byte Fields, the form the Platform
+// Verifier reads both digests in.
+fn halves(digest: [u8; 32]) -> [Field; 2] {
+    let mut high: Field = 0;
+    let mut low: Field = 0;
+    for i in 0..16 {
+        high = high * 256 + digest[i] as Field;
+        low = low * 256 + digest[i + 16] as Field;
+    }
+    [high, low]
+}
+
+// REQ-PLAT-04: a Google `sub` is printable ASCII, 0x20 through 0x7e, and like
+// every string claim it excludes the closing quote (REQ-COMMON-19B). Only its
+// digest leaves the circuit, so no later role can check these bytes.
+fn assert_sub_byte(byte: u8) {
+    assert((byte >= 32) & (byte <= 126) & (byte != 34), "sub byte outside printable ASCII");
 }
 
 // REQ-COMMON-19 / REQ-COMMON-19D: every claim match must end at a JSON
@@ -91,7 +127,9 @@ fn main(
     authorization_digest: pub [u8; DIGEST_LEN],
     // Full SHA-256(client_id), packed as two big-endian 16-byte Fields.
     audience_hash: pub [Field; 2],
-    sub_packed: pub [Field; 1],
+    // The canonical Google `userId`: SHA-256 of `libid.google-user-id` || `sub`,
+    // packed like the audience hash. The `sub` itself stays private.
+    user_id_hash: pub [Field; 2],
     email_packed: pub [Field; 2],
     exp: pub u64,
     modulus: pub [u128; NUM_LIMBS],
@@ -172,7 +210,7 @@ fn main(
     );
 
     // 5b. `sub` substring at sub_offset in payload_json - the immutable
-    //     Google account id, revealed as a public input (mirrors email/nonce).
+    //     Google account id. Only its digest is public.
     //     Pattern bytes: `"sub":"` = [34, 115, 117, 98, 34, 58, 34]
     let sub_prefix: [u8; 7] = [34, 115, 117, 98, 34, 58, 34];
     for i in 0..SUB_PREFIX_LEN {
@@ -181,15 +219,17 @@ fn main(
     for i in 0..SUB_MAX {
         if i < sub_len {
             assert(payload_json[sub_offset + SUB_PREFIX_LEN + i] == sub_bytes[i]);
-            // Same quote-exclusion as email/nonce: no interior `"` in the sub.
-            assert(sub_bytes[i] != 34);
+            assert_sub_byte(sub_bytes[i]);
         } else {
-            // Zero the padding so sub_packed is canonical.
+            // Zero the padding, so no byte past the `sub` reaches the digest.
             assert(sub_bytes[i] == 0);
         }
     }
     assert(payload_json[sub_offset + SUB_PREFIX_LEN + sub_len] == 34); // closing `"`
     assert_structural(payload_json[sub_offset + SUB_PREFIX_LEN + sub_len + 1]);
+    let user_id = halves(user_id_digest(sub_bytes, sub_len));
+    assert(user_id[0] == user_id_hash[0]);
+    assert(user_id[1] == user_id_hash[1]);
 
     // 6. `email_verified`:true must be present in the payload.
     //    Pattern bytes: `"email_verified":true`
@@ -256,15 +296,9 @@ fn main(
     assert(payload_json[aud_offset + AUD_PREFIX_LEN + audience_len] == 34);
     assert_structural(payload_json[aud_offset + AUD_PREFIX_LEN + audience_len + 1]);
 
-    let computed_audience_hash: [u8; 32] = sha256_var(audience_bytes, audience_len);
-    let mut audience_h0: Field = 0;
-    let mut audience_h1: Field = 0;
-    for i in 0..16 {
-        audience_h0 = audience_h0 * 256 + computed_audience_hash[i] as Field;
-        audience_h1 = audience_h1 * 256 + computed_audience_hash[i + 16] as Field;
-    }
-    assert(audience_h0 == audience_hash[0]);
-    assert(audience_h1 == audience_hash[1]);
+    let audience = halves(sha256_var(audience_bytes, audience_len));
+    assert(audience[0] == audience_hash[0]);
+    assert(audience[1] == audience_hash[1]);
 
     // 9. Offset bounds: every claimed pattern -- including its trailing
     //    structural byte (REQ-COMMON-19B: the whole match, inside the
@@ -290,26 +324,26 @@ fn main(
     assert(aud_offset >= 1);
 
     // 9. Pack email_bytes (62 bytes, zero-padded past the real length) into
-    //    [Field; 2], big-endian, 31 bytes per Field, and sub_bytes into one.
-    //    Assert the public-input packed values match. The contract reverses
-    //    this: takes the user-supplied plaintext, zero-pads to 62, packs the
-    //    same way, compares.
+    //    [Field; 2], big-endian, 31 bytes per Field. Assert the public-input
+    //    packed values match. The contract reverses this: takes the
+    //    user-supplied plaintext, zero-pads to 62, packs the same way,
+    //    compares.
     let mut email_f0: Field = 0;
     let mut email_f1: Field = 0;
-    let mut sub_f0: Field = 0;
     for i in 0..31 {
         email_f0 = email_f0 * 256 + email_bytes[i] as Field;
         email_f1 = email_f1 * 256 + email_bytes[i + 31] as Field;
-        sub_f0 = sub_f0 * 256 + sub_bytes[i] as Field;
     }
     assert(email_f0 == email_packed[0]);
     assert(email_f1 == email_packed[1]);
-    assert(sub_f0 == sub_packed[0]);
 
     // 10. Type bounds.
     assert(signing_input_len <= SIGNING_INPUT_MAX);
     assert(payload_json_len <= PAYLOAD_JSON_MAX);
     assert(email_len <= EMAIL_MAX);
+    // REQ-PLAT-04: no empty `sub`. The Platform Verifier sees only a digest,
+    // and every preimage has one, so this is the only place it can fail.
+    assert(sub_len > 0);
     assert(sub_len <= SUB_MAX);
     assert(audience_len > 0);
     assert(audience_len <= AUDIENCE_MAX);
@@ -394,6 +428,88 @@ fn nonce_encoding_matches_external_vectors() {
     for i in 0..NONCE_B64_LEN {
         assert(got[i] == counting_expected[i], "counting digest encoded wrong");
     }
+}
+
+// The vectors below are Python `hashlib.sha256` of the tag and the `sub`, so
+// they check the circuit against an oracle outside the Noir ecosystem.
+fn padded_sub<let N: u32>(text: str<N>) -> [u8; SUB_MAX] {
+    let bytes = text.as_bytes();
+    let mut sub: [u8; SUB_MAX] = [0; SUB_MAX];
+    for i in 0..N {
+        sub[i] = bytes[i];
+    }
+    sub
+}
+
+#[test]
+fn user_id_digest_matches_the_published_vector() {
+    // The Google `userId` vector platform-ceremonies.md section 2.1 publishes.
+    let expected: [u8; 32] = [
+        0x20, 0x07, 0x80, 0x23, 0xc9, 0xd4, 0xbf, 0x6b, 0xff, 0xc2, 0x58, 0x0e, 0xc3, 0x64, 0x46,
+        0x07, 0x5d, 0x10, 0xc8, 0x45, 0x3c, 0xec, 0xbe, 0x4f, 0x1c, 0xb3, 0xd3, 0x26, 0xb2, 0xb3,
+        0x55, 0x60,
+    ];
+    let got = user_id_digest(padded_sub("123456789012345678901"), 21);
+    for i in 0..32 {
+        assert(got[i] == expected[i], "userId digest disagrees with the published vector");
+    }
+    let parts = halves(got);
+    assert(parts[0] == 0x20078023c9d4bf6bffc2580ec3644607);
+    assert(parts[1] == 0x5d10c8453cecbe4f1cb3d326b2b35560);
+}
+
+#[test]
+fn user_id_digest_covers_the_shortest_and_longest_sub() {
+    // One byte, and all 31: the tag plus the longest `sub` still fits the
+    // single block the length comment on SUB_MAX promises.
+    let one: [u8; 32] = [
+        0xe5, 0x19, 0x2d, 0x7e, 0x50, 0xd1, 0x0d, 0x86, 0xd2, 0x47, 0xe1, 0x62, 0xe5, 0x94, 0xfe,
+        0x35, 0x96, 0x99, 0xd4, 0x3c, 0xd7, 0x8d, 0x36, 0x90, 0x09, 0x94, 0xc5, 0x51, 0x7d, 0x63,
+        0x60, 0x29,
+    ];
+    let got = user_id_digest(padded_sub("1"), 1);
+    for i in 0..32 {
+        assert(got[i] == one[i], "one-byte sub digest disagrees");
+    }
+    // "!" followed by thirty "~": the lowest and highest printable bytes.
+    let full: [u8; 32] = [
+        0x6c, 0x55, 0xfe, 0x01, 0xd5, 0x03, 0xec, 0x6a, 0x12, 0x2a, 0x30, 0xad, 0xcd, 0xad, 0x51,
+        0x9e, 0xe1, 0x85, 0x57, 0x6e, 0x64, 0x32, 0xdf, 0xbd, 0xee, 0xf6, 0x5a, 0x6e, 0x39, 0x07,
+        0xdd, 0x04,
+    ];
+    let got = user_id_digest(padded_sub("!~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"), SUB_MAX);
+    for i in 0..32 {
+        assert(got[i] == full[i], "31-byte sub digest disagrees");
+    }
+}
+
+#[test]
+fn printable_sub_bytes_are_accepted() {
+    for byte in 32..127 {
+        if byte != 34 {
+            assert_sub_byte(byte as u8);
+        }
+    }
+}
+
+#[test(should_fail_with = "sub byte outside printable ASCII")]
+fn a_control_byte_in_sub_is_rejected() {
+    assert_sub_byte(0x1f);
+}
+
+#[test(should_fail_with = "sub byte outside printable ASCII")]
+fn delete_in_sub_is_rejected() {
+    assert_sub_byte(0x7f);
+}
+
+#[test(should_fail_with = "sub byte outside printable ASCII")]
+fn a_non_ascii_byte_in_sub_is_rejected() {
+    assert_sub_byte(0x80);
+}
+
+#[test(should_fail_with = "sub byte outside printable ASCII")]
+fn a_quote_in_sub_is_rejected() {
+    assert_sub_byte(34);
 }
 
 #[test]

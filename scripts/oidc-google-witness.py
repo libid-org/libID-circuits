@@ -37,6 +37,9 @@ BARRETT_OVERFLOW_BITS = 6
 DIGEST = bytes.fromhex("b318fb559e16a179b853ed2853576cda16032d93b0839bb81a55135d334c0af5")
 AUDIENCE = b"000000000000-libidfixture.apps.googleusercontent.com"
 SUB = b"100000000000000000001"
+# The canonical Google `userId` is SHA-256 of this tag and the `sub`
+# (platform-ceremonies.md section 2.1).
+USER_ID_TAG = b"libid.google-user-id"
 EMAIL = b"fixture@example.com"
 EXP = 1893456000
 
@@ -128,6 +131,7 @@ def witness() -> str:
         return payload_json.index(claim)
 
     audience_hash = hashlib.sha256(AUDIENCE).digest()
+    user_id_hash = hashlib.sha256(USER_ID_TAG + SUB).digest()
     fields = {
         "signing_input": padded(signing_input, SIGNING_INPUT_MAX),
         "signing_input_len": len(signing_input),
@@ -152,7 +156,7 @@ def witness() -> str:
         "redc": limbs((1 << (2 * MOD_BITS + BARRETT_OVERFLOW_BITS)) // key.modulus),
         "authorization_digest": list(DIGEST),
         "audience_hash": ["0x" + audience_hash[:16].hex(), "0x" + audience_hash[16:].hex()],
-        "sub_packed": [packed(SUB)],
+        "user_id_hash": ["0x" + user_id_hash[:16].hex(), "0x" + user_id_hash[16:].hex()],
         "email_packed": [packed(EMAIL[:31]), packed(EMAIL[31:])],
         "exp": EXP,
         "modulus": limbs(key.modulus),
