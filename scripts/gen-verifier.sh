@@ -13,27 +13,30 @@
 #   --artifacts <dir>  where scripts/build.sh wrote (default ./artifacts);
 #                      point it at an unpacked release to regenerate and
 #                      byte-compare against what shipped
-#   --contract-name X  rename the concrete verifier contract from bb's fixed
+#   --contract-name X  rename the verifier contract from bb's fixed
 #                      `HonkVerifier` to X; default derived from <circuit>
 #                      (see below)
 #
 # Contract name: bb always emits `HonkVerifier`, and a consumer compiling
-# both verifiers in one project needs distinct names, so the concrete
-# contract is renamed to <Circuit>HonkVerifier with the directory name in
-# PascalCase: bearer-link -> BearerLinkHonkVerifier. The names the current
+# both verifiers in one project needs distinct names, so the contract is
+# renamed to <Circuit>HonkVerifier with the directory name in PascalCase:
+# bearer-link -> BearerLinkHonkVerifier. The names the current
 # circuits ship under are pinned in KNOWN_VERIFIERS below and checked on
 # every run: renaming a circuit directory renames the contract every
 # consumer compiles, so it fails here instead of shipping.
 #
-# Post-processing — this is the interchange format, raw bb output plus
-# exactly these two rewrites:
-#   1. every `assembly {` becomes `assembly ("memory-safe") {` — required for
-#      consumers compiling via_ir;
-#   2. the contract rename above.
+# Template: bb's optimized verifier with zero knowledge (`-t evm
+# --optimized`), one contract that consumers deploy without linking. The
+# Proving Circuit is zero-knowledge by specification, so the target stays
+# `evm`, never `evm-no-zk`.
 #
-# Deliberately NOT done here: `forge fmt`. This repo carries no Foundry
-# toolchain; the consumer runs `forge fmt` over the shipped file under its
-# own foundry.toml before compiling or committing it.
+# Consumers compile it without via_ir, for EVM version cancun or later:
+# solc cannot lay out the stack of its assembly under via_ir, and it uses
+# MCOPY. See README "Compiling a verifier".
+#
+# The interchange format is raw bb output plus exactly one rewrite, the
+# contract rename above. `forge fmt` is the consumer's: it formats the
+# shipped file under its own foundry.toml before compiling it.
 #
 # The verifier derives from the vk ALONE, so this needs only bb (pinned via
 # toolchain.env) and <artifacts>/<circuit>/vk — no nargo, no recompile.
@@ -118,24 +121,24 @@ if [[ "$have_bb" != "$BB_VERSION" ]]; then
   exit 1
 fi
 
-bb write_solidity_verifier -k "$vk" -o "$out" -t evm
+bb write_solidity_verifier -k "$vk" -o "$out" -t evm --optimized
 
-# via_ir consumers need the memory-safe annotation on every assembly block.
-perl -i -pe 's/assembly \{/assembly ("memory-safe") \{/g' "$out"
+perl -i -pe "s/^contract HonkVerifier is IVerifier/contract ${contract_name} is IVerifier/" "$out"
 
-# Only the concrete contract is renamed; the abstract base keeps its name.
-perl -i -pe "s/contract HonkVerifier is BaseZKHonkVerifier/contract ${contract_name} is BaseZKHonkVerifier/g" "$out"
-
-# Fail loudly if bb's output shape moved under the rewrites: consumers look
-# the contract up by name and compile under via_ir, so a silently missed
-# rewrite breaks them, not us.
-concrete="$(grep -c '^contract .* is BaseZKHonkVerifier' "$out" || true)"
-if [[ "$concrete" != 1 ]] || ! grep -q "^contract ${contract_name} is BaseZKHonkVerifier" "$out"; then
-  echo "error: $out: expected exactly one 'contract ${contract_name} is BaseZKHonkVerifier', found $concrete concrete contract(s)." >&2
+# Fail loudly if bb's output shape moved under the rename: consumers look
+# the contract up by name and deploy it without linking, so a missed rename
+# or a library breaks them, not us.
+contracts="$(grep -c '^contract ' "$out" || true)"
+if [[ "$contracts" != 1 ]]; then
+  echo "error: $out: expected one contract, found $contracts." >&2
   exit 1
 fi
-if grep -qE 'assembly[[:space:]]*\{' "$out"; then
-  echo "error: $out: an assembly block escaped the memory-safe rewrite." >&2
+if ! grep -q "^contract ${contract_name} is IVerifier" "$out"; then
+  echo "error: $out: its contract is not '${contract_name} is IVerifier'." >&2
+  exit 1
+fi
+if grep -q '^library ' "$out"; then
+  echo "error: $out: the verifier declares a library; consumers deploy it without linking." >&2
   exit 1
 fi
 

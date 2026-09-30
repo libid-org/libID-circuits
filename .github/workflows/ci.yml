@@ -2,9 +2,11 @@ name: CI
 
 # Two jobs. `circuits` proves that the committed sources build under the
 # pinned toolchain: tests pass, every circuit compiles, every vk generates,
-# and every Solidity verifier generates under its pinned contract name.
-# Nothing built here is kept — artifacts are never committed and ship
-# exclusively as release assets, rebuilt from source by release.yml.
+# and every Solidity verifier generates under its pinned contract name,
+# compiles the way consumers compile it, and verifies a proof of each
+# committed witness on chain. Nothing built here is kept — artifacts are
+# never committed and ship exclusively as release assets, rebuilt from
+# source by release.yml.
 # `dco` checks the Signed-off-by trailer CONTRIBUTING.md promises.
 #
 # Every third-party action is pinned by commit SHA, with the tag in a
@@ -25,9 +27,14 @@ concurrency:
   group: ci-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
+env:
+  # Foundry for scripts/check-verifiers.sh, the release libID-contracts CI
+  # pins.
+  FOUNDRY_VERSION: v1.7.1
+
 jobs:
   # ---------------------------------------------------------------------------
-  # Circuits: pinned toolchain, tests, full artifact build.
+  # Circuits: pinned toolchain, tests, full artifact build, verifier check.
   # ---------------------------------------------------------------------------
   circuits:
     name: Circuits
@@ -122,6 +129,15 @@ jobs:
           set -euo pipefail
           ./scripts/build.sh --out "$RUNNER_TEMP/artifacts"
           find "$RUNNER_TEMP/artifacts" -type f -exec sha256sum {} +
+
+      # forge compiles the verifiers as a consumer does; anvil and cast run
+      # them on chain.
+      - uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+        with:
+          version: ${{ env.FOUNDRY_VERSION }}
+
+      - name: Check the verifiers
+        run: ./scripts/check-verifiers.sh --artifacts "$RUNNER_TEMP/artifacts"
 
   # ---------------------------------------------------------------------------
   # DCO: every commit carries a Signed-off-by trailer, as CONTRIBUTING.md
