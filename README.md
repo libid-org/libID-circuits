@@ -151,8 +151,8 @@ scripts/build.sh && scripts/check-verifiers.sh
 ```
 
 `circuits/oidc-google/Prover.toml` is a Google-shaped ID token signed by a
-synthetic RSA-2048 key. `scripts/oidc-google-witness.py` writes it, and CI
-fails when the committed file differs from the script's output.
+synthetic RSA-2048 key, for the fixture `sub` 100000000000000000001 and
+`email` fixture@example.com.
 
 ## Releases
 
