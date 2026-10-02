@@ -33,18 +33,22 @@ from there on.
 `toolchain.env` is the single source of truth:
 
 ```
-NARGO_VERSION=1.0.0-beta.25
-BB_VERSION=5.2.0
+NARGO_VERSION=1.0.0-rc.3
+BB_VERSION=6.0.0-rc.2
 ```
 
 Install exactly those:
 
 ```sh
 curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash
-noirup --version 1.0.0-beta.25
+noirup --version 1.0.0-rc.3
 curl -L https://raw.githubusercontent.com/AztecProtocol/aztec-packages/master/barretenberg/bbup/install | bash
-bbup --version 5.2.0
+bbup --version 6.0.0-rc.2
 ```
+
+The two pins are one pair: a Barretenberg release builds against a single
+Noir commit (`noir/noir-repo` in aztec-packages at the bb tag) and reads only
+the ACIR that compiler writes. bb 6.0.0-rc.2 builds against Noir 1.0.0-rc.3.
 
 The pins matter because the whole chain is deterministic in the toolchain:
 
@@ -173,17 +177,25 @@ against its entry in `files`, run `forge fmt` over it under your own
 No `bb`, no nargo: the verifier is derived here, once, by the toolchain the
 manifest names.
 
-Verification keys under the pinned toolchain (nargo 1.0.0-beta.25, bb 5.2.0):
+Verification keys under the pinned toolchain (nargo 1.0.0-rc.3, bb 6.0.0-rc.2):
 
 | Circuit | vk_hash |
 |---|---|
-| `bearer-link` | `0x1d161afb536683d31a3e426db0feaa30de8be89cc45510579f361266c20e078f` |
-| `oidc-google` | `0x29fdabfacc34aac98d8d44158c1f1ba51b3d97da24c82305908ea33bb18c585c` |
+| `bearer-link` | `0x03d91fecc776e03f12331b31a3231d984a385682fb1a18a841e363cef0624184` |
+| `oidc-google` | `0x1fa1426da50e1a46d0e50035a3307e1c322b54875cbde06339dcf5d8bd043801` |
 
 The Google key has moved three times since the value this section cited before
 2026-08-12: once when the proof was bound to the Authorization Digest
 (REQ-PLAT-16B public inputs), again with the REQ-COMMON-19 /
 REQ-COMMON-19D constraints below, and again when the proof started publishing
 the `userId` digest in place of the `sub` (v0.4.0 shipped
-`0x1b50bbf6d8ea6efc7ecc2547c25b285511704a10d9247466e84045095d9c3f77`). The
-deployed verifier rolls with the next release.
+`0x1b50bbf6d8ea6efc7ecc2547c25b285511704a10d9247466e84045095d9c3f77`).
+
+Both keys moved with the toolchain. Barretenberg 6 proves ROM reads with a
+log-derivative lookup and derives full-width Fiat-Shamir challenges, so a
+circuit's key and verifier differ from bb 5's. v0.5.0, built by nargo
+1.0.0-beta.25 and bb 5.2.0, shipped
+`0x1d161afb536683d31a3e426db0feaa30de8be89cc45510579f361266c20e078f` for
+`bearer-link` and
+`0x29fdabfacc34aac98d8d44158c1f1ba51b3d97da24c82305908ea33bb18c585c` for
+`oidc-google`. The deployed verifiers roll with the next release.
