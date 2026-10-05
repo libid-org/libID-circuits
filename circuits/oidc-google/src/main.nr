@@ -123,7 +123,7 @@ fn main(
     // ---- public inputs ----
     // Exactly the public inputs REQ-PLAT-16B fixes, in the order it lists.
     // The Authorization Digest binds the operation, chain and Platform
-    // Ceremony Version, so no chain id or registry address appears here.
+    // Ceremony Version, so no chain id appears here.
     authorization_digest: pub [u8; DIGEST_LEN],
     // Full SHA-256(client_id), packed as two big-endian 16-byte Fields.
     audience_hash: pub [Field; 2],
