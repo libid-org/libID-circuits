@@ -7,7 +7,7 @@
 #   scripts/gen-verifier.sh <circuit> [<out.sol>] [--artifacts <dir>] [--contract-name X]
 #
 #   <circuit>          directory name under circuits/ and <artifacts>/
-#                      (bearer-link-x, oidc-google)
+#                      (bearer-link-x, bearer-link-github, oidc-google)
 #   <out.sol>          output path; default <artifacts>/<circuit>/<Contract>.sol,
 #                      next to the vk, which is the release layout
 #   --artifacts <dir>  where scripts/build.sh wrote (default ./artifacts);
@@ -18,7 +18,7 @@
 #                      (see below)
 #
 # Contract name: bb always emits `HonkVerifier`, and a consumer compiling
-# both verifiers in one project needs distinct names, so the contract is
+# every verifier in one project needs distinct names, so the contract is
 # renamed to <Circuit>HonkVerifier with the directory name in PascalCase:
 # bearer-link-x -> BearerLinkXHonkVerifier. The names the current
 # circuits ship under are pinned in KNOWN_VERIFIERS below and checked on

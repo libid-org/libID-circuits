@@ -110,7 +110,8 @@ jobs:
         run: shellcheck scripts/*.sh
 
       # Every circuit carries its own #[test] fns in src/main.nr, and
-      # lib/identity runs the handles.json vector table (src/table.nr).
+      # lib/identity runs the handles.json vector table (src/table.nr) and
+      # its own tests (src/tests.nr).
       - name: nargo test
         run: |
           set -euo pipefail

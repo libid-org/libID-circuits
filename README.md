@@ -30,9 +30,10 @@ only debug metadata in the ACIR json moves); CI enforces `nargo fmt --check`
 from there on.
 
 `lib/identity` is the library the identity circuits share: commitment
-openings, the tagged node hash, and the handle and id rules. Its constants and
+openings, the tagged node hash, the handle and id rules, and `identity_link`,
+the relation both bearer-link circuits run with their platform's constants. Its constants and
 its test table, `src/table.nr`, are generated from libid-contracts'
-`solidity/contracts/identity/handles.json`, the table Solidity, Rust and
+`solidity/contracts/handles/handles.json`, the table Solidity, Rust and
 TypeScript run too:
 
 ```sh
@@ -49,6 +50,9 @@ another table.
 `bearer-link-github` `Prover.toml` from the identity-link witness libid-rs
 emits with a ceremony record. The committed ones are libid-rs' synthetic X
 and GitHub fixtures, whose handles (`Alice_1`, `OctoCat`) exercise the fold.
+A real capture's `*.secret.json` witness holds a live bearer: the script
+writes its `Prover.toml` only to an `--out` path git does not track, with
+mode 0600, and never to stdout.
 
 ## Toolchain
 
@@ -105,7 +109,11 @@ refuse to run under any other version.
   (`bb write_solidity_verifier -t evm --optimized` on the vk, see
   "Regenerating a Solidity verifier"), the contract named after the circuit
   directory: `bearer-link-x/BearerLinkXHonkVerifier.sol`,
-  `oidc-google/OidcGoogleHonkVerifier.sol`.
+  `bearer-link-github/BearerLinkGithubHonkVerifier.sol`,
+  `oidc-google/OidcGoogleHonkVerifier.sol`;
+- `handles-table.nr`, `handles.json.sha256` — identity circuits only: the
+  generated table the circuit's rules and tags come from, and the SHA-256 of
+  the `handles.json` it was generated from.
 
 ```sh
 scripts/build.sh              # build into ./artifacts/ (requires the pinned toolchain)
@@ -136,7 +144,7 @@ the target is never `evm-no-zk`.
 
 The interchange format is raw `bb write_solidity_verifier` output plus
 exactly one rewrite: the contract is renamed off bb's fixed `HonkVerifier`
-to `<Circuit>HonkVerifier` (both verifiers must compile in one project). The
+to `<Circuit>HonkVerifier` (all three verifiers compile in one project). The
 names the current circuits ship under are pinned in the script and checked
 on every run, so renaming a circuit directory fails the build instead of
 silently renaming the contract consumers compile. `forge fmt` is the
@@ -215,18 +223,12 @@ Verification keys under the pinned toolchain (nargo 1.0.0-rc.3, bb 6.0.0-rc.2):
 | `bearer-link-github` | `0x1168344f46c63b1fa251c174f4b4d4e7c104cf65ab38d36fcbcf66108e626770` |
 | `oidc-google` | `0x2b2c5f9b3301f9ba7b6d69db7baaebc124b09959b7fb7ae87734ecb56667a488` |
 
-The Google key has moved three times since the value this section cited before
-2026-08-12: once when the proof was bound to the Authorization Digest
-(REQ-PLAT-16B public inputs), again with the REQ-COMMON-19 /
-REQ-COMMON-19D constraints below, and again when the proof started publishing
-the `userId` digest in place of the `sub` (v0.4.0 shipped
-`0x1b50bbf6d8ea6efc7ecc2547c25b285511704a10d9247466e84045095d9c3f77`).
-
-Both keys moved with the toolchain. Barretenberg 6 proves ROM reads with a
-log-derivative lookup and derives full-width Fiat-Shamir challenges, so a
-circuit's key and verifier differ from bb 5's. v0.5.0, built by nargo
-1.0.0-beta.25 and bb 5.2.0, shipped
-`0x1d161afb536683d31a3e426db0feaa30de8be89cc45510579f361266c20e078f` for
-`bearer-link` and
-`0x29fdabfacc34aac98d8d44158c1f1ba51b3d97da24c82305908ea33bb18c585c` for
-`oidc-google`. The deployed verifiers roll with the next release.
+All three keys differ from v0.5.0's, which nargo 1.0.0-beta.25 and bb 5.2.0
+built. Barretenberg 6 proves ROM reads with a log-derivative lookup and
+derives full-width Fiat-Shamir challenges, so every key and verifier differs
+from bb 5's. `bearer-link-x` and `bearer-link-github` replace v0.5.0's single
+`bearer-link` (`0x1d161afb536683d31a3e426db0feaa30de8be89cc45510579f361266c20e078f`),
+and `oidc-google`
+(`0x29fdabfacc34aac98d8d44158c1f1ba51b3d97da24c82305908ea33bb18c585c` in
+v0.5.0) publishes the handle node of the folded address. The deployed
+verifiers roll with the next release.

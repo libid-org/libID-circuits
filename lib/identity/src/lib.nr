@@ -8,7 +8,7 @@
 //   handleNode = SHA256(handle tag || fold(handle))
 //
 // The rules, the tags and the vector table are generated from libid-contracts'
-// `solidity/contracts/identity/handles.json` into `table.nr`; the algorithm
+// `solidity/contracts/handles/handles.json` into `table.nr`; the algorithm
 // below is written by hand, as it is in Solidity, Rust and TypeScript, and the
 // generated tests run it against the same table those languages run.
 
