@@ -24,20 +24,32 @@ import base64
 import hashlib
 import json
 import pathlib
+import sys
+
+sys.dont_write_bytecode = True
+import identity_table  # noqa: E402  (beside this script)
 
 SEED = b"libid oidc-google fixture key v2"
 SUB = "100000000000000000001"
 EMAIL = "Fixture@Example.com"
 AUD = "000000000000-libidfixture.apps.googleusercontent.com"
+# `authorization_digest` of libid-rs' x and github ceremony session fixtures
+# (`cargo run -p libid-tlsn --example ceremony_fixtures`, chain 31337). It is
+# restated, not read: those fixtures live in libid-rs and libid-contracts.
 DIGEST = bytes.fromhex("6beb766c7835d641b3800e8e4c03616d386251c86dcb8b640e59cec9ba42a01f")
 IAT = 1893452400
 EXP = 1893456000
 
+# circuits/oidc-google/src/main.nr's buffers.
 SIGNING_INPUT_MAX = 1280
 PAYLOAD_JSON_MAX = 768
-EMAIL_MAX = 62
-SUB_MAX = 31
 AUDIENCE_MAX = 128
+# The address and `sub` buffers and the tags are lib/identity's generated
+# Google constants.
+EMAIL_MAX = identity_table.integer("MAX_HANDLE_GOOGLE")
+SUB_MAX = identity_table.integer("MAX_ID_GOOGLE")
+USER_ID_TAG = identity_table.byte_array("USER_ID_TAG_GOOGLE")
+HANDLE_TAG = identity_table.byte_array("HANDLE_TAG_GOOGLE")
 LIMB_BITS = 120
 NUM_LIMBS = 18
 MOD_BITS = 2048
@@ -157,7 +169,7 @@ def main() -> int:
         return payload.index(needle.encode())
 
     exp_digits = str(EXP)
-    folded = bytes(b + 0x20 if 0x41 <= b <= 0x5A else b for b in EMAIL.encode())
+    folded = identity_table.fold(EMAIL.encode())
     lines = [
         "# Written by scripts/google-fixture-witness.py: a Google-shaped ID token",
         f"# signed by a seeded synthetic RSA-2048 key, `sub` {SUB}, `email` {EMAIL}.",
@@ -186,8 +198,8 @@ def main() -> int:
         f"redc = {toml_list(limbs((1 << (2 * MOD_BITS + 6)) // n))}",
         f"authorization_digest = {toml_list(list(DIGEST))}",
         f"audience_hash = {toml_list(halves(hashlib.sha256(AUD.encode()).digest()))}",
-        f"id_node = {toml_list(halves(hashlib.sha256(b'libid.google.user-id' + SUB.encode()).digest()))}",
-        f"handle_node = {toml_list(halves(hashlib.sha256(b'libid.google.handle' + folded).digest()))}",
+        f"id_node = {toml_list(halves(hashlib.sha256(USER_ID_TAG + SUB.encode()).digest()))}",
+        f"handle_node = {toml_list(halves(hashlib.sha256(HANDLE_TAG + folded).digest()))}",
         f'exp = "{EXP}"',
         f"modulus = {toml_list(limbs(n))}",
     ]

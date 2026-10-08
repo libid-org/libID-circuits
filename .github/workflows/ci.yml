@@ -119,6 +119,14 @@ jobs:
             (cd "$dir" && nargo test)
           done
 
+      # The committed oidc-google witness is this script's output. Its key is
+      # seeded, so a regeneration is byte-identical; a drift fails here.
+      - name: oidc-google witness is reproducible
+        run: |
+          set -euo pipefail
+          python3 scripts/google-fixture-witness.py --out "$RUNNER_TEMP/oidc-google.Prover.toml"
+          diff -u circuits/oidc-google/Prover.toml "$RUNNER_TEMP/oidc-google.Prover.toml"
+
       # Full build: proves every circuit compiles, every vk generates, and
       # every Solidity verifier generates under its pinned contract name with
       # the pinned toolchain — the exact path release.yml runs to produce the
