@@ -20,7 +20,7 @@ OIDC_GOOGLE = ROOT / "circuits" / "oidc-google" / "src" / "main.nr"
 def constant(name: str, source: pathlib.Path = TABLE) -> str:
     """The right-hand side of `[pub] global <name>`, whitespace collapsed."""
     # nargo fmt wraps long constants, so read the declaration whole.
-    found = re.search(rf"\bglobal\s+{name}\s*:[^=]*=\s*([^;]*);", source.read_text())
+    found = re.search(rf"\bglobal\s+{re.escape(name)}\s*:[^=]*=\s*([^;]*);", source.read_text())
     if found is None:
         raise SystemExit(f"{source}: no `global {name}`; regenerate or check the name")
     return " ".join(found.group(1).split())
@@ -38,3 +38,11 @@ def byte_array(name: str, source: pathlib.Path = TABLE) -> bytes:
 def fold(value: bytes) -> bytes:
     """A-Z down to a-z, every other byte unchanged: lib.nr's `fold`."""
     return bytes(b + 0x20 if 0x41 <= b <= 0x5A else b for b in value)
+
+
+def package(circuit: pathlib.Path) -> str:
+    """The package name in a circuit directory's Nargo.toml."""
+    found = re.search(r'^name\s*=\s*"([^"]*)"', (circuit / "Nargo.toml").read_text(), re.MULTILINE)
+    if found is None:
+        raise SystemExit(f"{circuit}/Nargo.toml: no package name")
+    return found.group(1)

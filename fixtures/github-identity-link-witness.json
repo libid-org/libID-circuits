@@ -1,5 +1,8 @@
 {
-  "provenance": "Synthetic. The identity_link_witness member of libID-contracts' solidity/contracts/ceremony/test/fixtures/github-ceremony-session.json, which libid-rs writes with `cargo run -p libid-tlsn --example ceremony_fixtures`. No real account or bearer.",
+  "provenance": {
+    "synthetic": true,
+    "source": "The identity_link_witness member of libID-contracts' solidity/contracts/ceremony/test/fixtures/github-ceremony-session.json, which libid-rs writes with `cargo run -p libid-tlsn --example ceremony_fixtures`. No real account or bearer."
+  },
   "identity_link_witness": {
     "handle": {
       "blinder": "0xefd54da72e5fe1aa9f438616231eb26d",

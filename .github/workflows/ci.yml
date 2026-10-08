@@ -132,23 +132,33 @@ jobs:
             diff -u "circuits/bearer-link-$platform/Prover.toml" "$RUNNER_TEMP/bearer-link-$platform.Prover.toml"
           done
 
-      # A bare witness is a live capture whatever its name: the script must
-      # refuse stdout and an unignored path in the work tree, and write a
-      # path outside it with mode 0600 and nothing on stdout.
+      # A witness is secret unless its file carries the synthetic marker:
+      # a bare witness and a session file without the marker are refused on
+      # stdout, an unignored path in the work tree is refused (also when git
+      # cannot read the repository, as under dubious ownership), and a path
+      # outside it is written with mode 0600 and nothing on stdout.
       - name: Secret witness guard
         run: |
           set -euo pipefail
+          script=scripts/identity-link-witness.py
           bare="$RUNNER_TEMP/capture.json"
+          unmarked="$RUNNER_TEMP/unmarked.json"
           jq .identity_link_witness fixtures/x-identity-link-witness.json > "$bare"
-          if python3 scripts/identity-link-witness.py "$bare" > "$RUNNER_TEMP/stdout"; then
-            echo "::error::a bare witness was written to stdout"; exit 1
-          fi
-          [ ! -s "$RUNNER_TEMP/stdout" ]
-          if python3 scripts/identity-link-witness.py "$bare" --out leak.toml; then
+          jq 'del(.provenance)' fixtures/x-identity-link-witness.json > "$unmarked"
+          for witness in "$bare" "$unmarked"; do
+            if python3 "$script" "$witness" > "$RUNNER_TEMP/stdout"; then
+              echo "::error::$(basename "$witness"): a secret witness was written to stdout"; exit 1
+            fi
+            [ ! -s "$RUNNER_TEMP/stdout" ]
+          done
+          if python3 "$script" "$bare" --out leak.toml; then
             echo "::error::a bare witness was written into the work tree"; exit 1
           fi
+          if GIT_TEST_ASSUME_DIFFERENT_OWNER=1 python3 "$script" "$bare" --out leak.toml; then
+            echo "::error::a bare witness was written into a work tree git refused to read"; exit 1
+          fi
           [ ! -e leak.toml ]
-          python3 scripts/identity-link-witness.py "$bare" --out "$RUNNER_TEMP/secret.toml" > "$RUNNER_TEMP/stdout"
+          python3 "$script" "$bare" --out "$RUNNER_TEMP/secret.toml" > "$RUNNER_TEMP/stdout"
           [ ! -s "$RUNNER_TEMP/stdout" ]
           [ "$(stat -c %a "$RUNNER_TEMP/secret.toml")" = 600 ]
 
