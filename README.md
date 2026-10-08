@@ -42,9 +42,20 @@ scripts/regen-identity-handles.py --noir-out ../libid-circuits/lib/identity/src/
 ```
 
 `scripts/build.sh` copies the table into each identity circuit's artifacts as
-`handles-table.nr`, with the SHA-256 of the `handles.json` it was generated
-from in `handles.json.sha256`, so a consumer can tell a verifier built from
-another table.
+`handles-table.nr`, so a consumer can tell a verifier built from another
+table.
+
+`contracts.ref` pins the libID-contracts commit whose `handles.json` this
+table must match. CI checks out that commit and runs its
+`scripts/regen-identity-handles.py --compare-noir` against
+`lib/identity/src/table.nr`; it needs only Python. To move the pin after
+regenerating the table from a newer `handles.json`, write the new commit's
+full SHA, which must be pushed to libID-contracts:
+
+```sh
+git -C ../libid-contracts rev-parse HEAD > contracts.ref
+(cd ../libid-contracts && scripts/regen-identity-handles.py --compare-noir "$OLDPWD/lib/identity/src/table.nr")
+```
 
 `scripts/identity-link-witness.py` writes a `bearer-link-x` or
 `bearer-link-github` `Prover.toml` from the identity-link witness libid-rs
@@ -146,9 +157,8 @@ refuse to run under any other version.
   directory: `bearer-link-x/BearerLinkXHonkVerifier.sol`,
   `bearer-link-github/BearerLinkGithubHonkVerifier.sol`,
   `oidc-google/OidcGoogleHonkVerifier.sol`;
-- `handles-table.nr`, `handles.json.sha256` — identity circuits only: the
-  generated table the circuit's rules and tags come from, and the SHA-256 of
-  the `handles.json` it was generated from.
+- `handles-table.nr` — identity circuits only: the generated table the
+  circuit's rules and tags come from.
 
 ```sh
 scripts/build.sh              # build into ./artifacts/ (requires the pinned toolchain)
@@ -232,7 +242,7 @@ source with the pinned toolchain (`scripts/build.sh`) and attaches:
 - `libid-circuits-<version>-<circuit>.tar.gz` — one per circuit, containing
   `<package>.json`, `vk`, `vk_hash`, `<Contract>.sol`, and for the identity
   circuits (`bearer-link-x`, `bearer-link-github`, `oidc-google`)
-  `handles-table.nr` and `handles.json.sha256`;
+  `handles-table.nr`;
 - `manifest.json` — `{version, tag, toolchain: {nargo, bb}, tarballs:
   {<tarball>: {sha256, files: {<name>: sha256}}}}`.
 
@@ -245,10 +255,10 @@ against its entry in `files`, run `forge fmt` over it under your own
 No `bb`, no nargo: the verifier is derived here, once, by the toolchain the
 manifest names.
 
-For an identity circuit, also compare `handles.json.sha256` with the SHA-256
-of your `handles.json`, and `handles-table.nr` with what libid-contracts'
-`scripts/regen-identity-handles.py` generates from it. A mismatch means the
-verifier keys handles by another table.
+For an identity circuit, also check `handles-table.nr` against your
+`handles.json` with libID-contracts'
+`scripts/regen-identity-handles.py --compare-noir handles-table.nr`. A
+mismatch means the verifier keys handles by another table.
 
 Verification keys under the pinned toolchain (nargo 1.0.0-rc.3, bb 6.0.0-rc.2):
 

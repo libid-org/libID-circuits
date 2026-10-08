@@ -19,10 +19,9 @@
 #                   contract named after the circuit (bearer-link-x ->
 #                   BearerLinkXHonkVerifier); see scripts/gen-verifier.sh.
 #                   Ships so that consumers compile it and never run bb.
-#   handles-table.nr     identity circuits only (those depending on
-#   handles.json.sha256  lib/identity): the generated table the circuit's
-#                        rules and tags come from, and the SHA-256 of the
-#                        libid-contracts handles.json it was generated from
+#   handles-table.nr  identity circuits only (those depending on
+#                     lib/identity): the generated table the circuit's rules
+#                     and tags come from
 #
 # The vk derives from the ACIR bytecode alone, and the Solidity verifier from
 # the vk alone — so a release tarball is the complete, sufficient input for
@@ -77,12 +76,7 @@ if [[ "$have_bb" != "$BB_VERSION" ]]; then
   exit 1
 fi
 
-# --- Identity table -----------------------------------------------------------
 TABLE="$ROOT/lib/identity/src/table.nr"
-# nargo fmt may wrap the constant onto the next line, so read it whole.
-table_sha256="$(tr '\n' ' ' < "$TABLE" |
-  sed -n 's/.*pub global TABLE_SHA256: str<64> = *"\([0-9a-f]\{64\}\)".*/\1/p')"
-[[ -n "$table_sha256" ]] || { echo "error: no TABLE_SHA256 in $TABLE; regenerate it (README, lib/identity)" >&2; exit 1; }
 
 # --- Build -------------------------------------------------------------------
 for dir in "$ROOT"/circuits/*/; do
@@ -119,13 +113,12 @@ for dir in "$ROOT"/circuits/*/; do
   "$ROOT/scripts/gen-verifier.sh" "$circuit" --artifacts "$OUT"
 
   # An identity circuit's rules and tags are lib/identity's generated table,
-  # so the table ships with it: the source, and the SHA-256 of the
-  # handles.json it was generated from. A consumer compares both with its own
-  # handles.json; a verifier built from another table keys handles another
-  # way.
+  # so the table ships with it. A consumer compares it with what its own
+  # handles.json generates (libID-contracts' regen-identity-handles.py
+  # --compare-noir); a verifier built from another table keys handles
+  # another way.
   if grep -q '^libid_identity *=' "$dir/Nargo.toml"; then
     cp "$TABLE" "$OUT/$circuit/handles-table.nr"
-    printf '%s\n' "$table_sha256" > "$OUT/$circuit/handles.json.sha256"
   fi
 done
 

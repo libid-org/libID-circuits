@@ -1,12 +1,14 @@
 name: CI
 
-# Two jobs. `circuits` proves that the committed sources build under the
+# Three jobs. `circuits` proves that the committed sources build under the
 # pinned toolchain: tests pass, every circuit compiles, every vk generates,
 # and every Solidity verifier generates under its pinned contract name,
 # compiles the way consumers compile it, and verifies a proof of each
 # committed witness on chain. Nothing built here is kept — artifacts are
 # never committed and ship exclusively as release assets, rebuilt from
 # source by release.yml.
+# `handles-table` checks lib/identity's generated table against
+# libID-contracts' handles.json at the commit contracts.ref pins.
 # `dco` checks the Signed-off-by trailer CONTRIBUTING.md promises.
 #
 # Every third-party action is pinned by commit SHA, with the tag in a
@@ -174,6 +176,36 @@ jobs:
 
       - name: Check the verifiers
         run: ./scripts/check-verifiers.sh --artifacts "$RUNNER_TEMP/artifacts"
+
+  # ---------------------------------------------------------------------------
+  # Handle table: lib/identity/src/table.nr is what libID-contracts'
+  # handles.json generates, at the commit contracts.ref pins. The comparison
+  # is libID-contracts' own generator, so no rule is restated here; it needs
+  # Python alone.
+  # ---------------------------------------------------------------------------
+  handles-table:
+    name: Handle table
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Read the pinned libID-contracts commit
+        id: pin
+        run: |
+          set -euo pipefail
+          ref="$(tr -d '[:space:]' < contracts.ref)"
+          [[ "$ref" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::contracts.ref must hold one full commit SHA"; exit 1; }
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: libid-org/libID-contracts
+          ref: ${{ steps.pin.outputs.ref }}
+          path: libid-contracts
+
+      - name: table.nr matches handles.json
+        run: python3 libid-contracts/scripts/regen-identity-handles.py --compare-noir "$GITHUB_WORKSPACE/lib/identity/src/table.nr"
 
   # ---------------------------------------------------------------------------
   # DCO: every commit carries a Signed-off-by trailer, as CONTRIBUTING.md

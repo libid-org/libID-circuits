@@ -8,8 +8,7 @@ name: Release
 #                                               <package>.json, vk, vk_hash,
 #                                               <Contract>.sol, and for an
 #                                               identity circuit
-#                                               handles-table.nr and
-#                                               handles.json.sha256
+#                                               handles-table.nr
 #   manifest.json                               version, toolchain pins, and
 #                                               sha256 of every tarball and
 #                                               every file inside them
