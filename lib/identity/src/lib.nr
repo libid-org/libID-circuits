@@ -62,18 +62,6 @@ pub fn constrain_bearer(bearer: [u8; MAX_BEARER_LEN], bearer_len: u32) {
     }
 }
 
-/// Verify a tlsn hash commitment:
-/// `SHA256(plaintext[0..plaintext_len] || blinder) == expected`.
-pub fn verify_hash_commit<let MAX_PLAIN: u32, let TOTAL: u32>(
-    plaintext_padded: [u8; MAX_PLAIN],
-    plaintext_len: u32,
-    blinder: [u8; BLINDER_LEN],
-    expected: [u8; 32],
-) {
-    let computed = hash_commit::<MAX_PLAIN, TOTAL>(plaintext_padded, plaintext_len, blinder);
-    assert(computed == expected, "hash commit mismatch");
-}
-
 /// A tlsn hash commitment, `SHA256(plaintext[0..plaintext_len] || blinder)`.
 ///
 /// `TOTAL` is the caller's `MAX_PLAIN + BLINDER_LEN`; Noir array types cannot
@@ -214,4 +202,104 @@ pub fn check_id<let MAX: u32>(raw: [u8; MAX], len: u32, rules: IdRules) {
     if !rules.leading_zero {
         assert((len == 1) | (raw[0] != 0x30), "id shape not allowed");
     }
+}
+
+/// The bearer-link relation with the account as keys, for one platform's
+/// tags and rules:
+///
+///   1. one hidden bearer opens both bearer commitments, the token session's
+///      and the identity session's;
+///   2. the RAW id and the RAW handle open their commitments -- the bytes the
+///      platform sent, before any transform;
+///   3. the raw id meets `id_rules` and the raw handle meets `handle_rules`;
+///      both checks also require a zero tail, so the bytes the commitments
+///      do not hash are not free;
+///   4. id_node     = SHA256(id_tag     || raw id)
+///      handle_node = SHA256(handle_tag || fold(raw handle)),
+///      the fold applied byte by byte to the same witness that opened (2).
+///
+/// So the signed commitment and the output node are tied through the
+/// constrained fold: a node is a key only for the handle the platform
+/// returned. A circuit's main passes its own inputs through in order and
+/// selects the platform's constants; the public inputs are main's.
+pub fn identity_link<let ID_TAG: u32, let HANDLE_TAG: u32, let MAX_ID: u32, let MAX_HANDLE: u32>(
+    id_tag: [u8; ID_TAG],
+    handle_tag: [u8; HANDLE_TAG],
+    id_rules: IdRules,
+    handle_rules: HandleRules,
+    bearer: [u8; MAX_BEARER_LEN],
+    bearer_len: u32,
+    blinder_token: [u8; BLINDER_LEN],
+    blinder_identity: [u8; BLINDER_LEN],
+    id: [u8; MAX_ID],
+    id_len: u32,
+    blinder_id: [u8; BLINDER_LEN],
+    handle: [u8; MAX_HANDLE],
+    handle_len: u32,
+    blinder_handle: [u8; BLINDER_LEN],
+    token_commitment: [u8; 32],
+    identity_commitment: [u8; 32],
+    id_commitment: [Field; 2],
+    handle_commitment: [Field; 2],
+    id_node: [Field; 2],
+    handle_node: [Field; 2],
+) {
+    // 1. The bearer link.
+    constrain_bearer(bearer, bearer_len);
+    assert(
+        hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(
+            bearer,
+            bearer_len,
+            blinder_token,
+        )
+            == token_commitment,
+        "token bearer commitment mismatch",
+    );
+    assert(
+        hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(
+            bearer,
+            bearer_len,
+            blinder_identity,
+        )
+            == identity_commitment,
+        "identity bearer commitment mismatch",
+    );
+
+    // 2-3. The raw values, checked as the platform sent them.
+    check_id(id, id_len, id_rules);
+    let folded = normalize_handle(handle, handle_len, handle_rules);
+    assert(
+        halves(
+            hash_commit::<MAX_ID, MAX_ID + BLINDER_LEN>(id, id_len, blinder_id),
+        )
+            == id_commitment,
+        "id commitment mismatch",
+    );
+    assert(
+        halves(hash_commit::<MAX_HANDLE, MAX_HANDLE + BLINDER_LEN>(
+            handle,
+            handle_len,
+            blinder_handle,
+        ))
+            == handle_commitment,
+        "handle commitment mismatch",
+    );
+
+    // 4. The keys.
+    assert(
+        halves(
+            tagged_hash::<ID_TAG, MAX_ID, ID_TAG + MAX_ID>(id_tag, id, id_len),
+        )
+            == id_node,
+        "id node mismatch",
+    );
+    assert(
+        halves(tagged_hash::<HANDLE_TAG, MAX_HANDLE, HANDLE_TAG + MAX_HANDLE>(
+            handle_tag,
+            folded,
+            handle_len,
+        ))
+            == handle_node,
+        "handle node mismatch",
+    );
 }

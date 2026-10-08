@@ -30,25 +30,13 @@
 
 use libid_identity::{
     BLINDER_LEN,
-    check_id,
-    constrain_bearer,
-    halves,
-    hash_commit,
+    identity_link,
     MAX_BEARER_LEN,
-    normalize_handle,
     table::{
         HANDLE_RULES_GITHUB, HANDLE_TAG_GITHUB, ID_RULES_GITHUB, MAX_HANDLE_GITHUB, MAX_ID_GITHUB,
         USER_ID_TAG_GITHUB,
     },
-    tagged_hash,
-    verify_hash_commit,
 };
-
-global BEARER_COMMIT_LEN: u32 = 144; // MAX_BEARER_LEN + BLINDER_LEN
-global ID_COMMIT_LEN: u32 = 36; // MAX_ID_GITHUB + BLINDER_LEN
-global HANDLE_COMMIT_LEN: u32 = 55; // MAX_HANDLE_GITHUB + BLINDER_LEN
-global ID_NODE_LEN: u32 = 40; // len(USER_ID_TAG_GITHUB) + MAX_ID_GITHUB
-global HANDLE_NODE_LEN: u32 = 58; // len(HANDLE_TAG_GITHUB) + MAX_HANDLE_GITHUB
 
 fn main(
     // --- Private ---
@@ -70,58 +58,27 @@ fn main(
     id_node: pub [Field; 2],
     handle_node: pub [Field; 2],
 ) {
-    // 1. The bearer link.
-    constrain_bearer(bearer, bearer_len);
-    verify_hash_commit::<MAX_BEARER_LEN, BEARER_COMMIT_LEN>(
+    identity_link(
+        USER_ID_TAG_GITHUB,
+        HANDLE_TAG_GITHUB,
+        ID_RULES_GITHUB,
+        HANDLE_RULES_GITHUB,
         bearer,
         bearer_len,
         blinder_token,
-        token_commitment,
-    );
-    verify_hash_commit::<MAX_BEARER_LEN, BEARER_COMMIT_LEN>(
-        bearer,
-        bearer_len,
         blinder_identity,
+        id,
+        id_len,
+        blinder_id,
+        handle,
+        handle_len,
+        blinder_handle,
+        token_commitment,
         identity_commitment,
-    );
-
-    // 2-3. The raw values, checked as GitHub sent them. Both checks also require a
-    // zero tail, so the bytes the commitments do not hash are not free.
-    check_id(id, id_len, ID_RULES_GITHUB);
-    let folded = normalize_handle(handle, handle_len, HANDLE_RULES_GITHUB);
-    assert(
-        halves(
-            hash_commit::<MAX_ID_GITHUB, ID_COMMIT_LEN>(id, id_len, blinder_id),
-        )
-            == id_commitment,
-        "id commitment mismatch",
-    );
-    assert(
-        halves(hash_commit::<MAX_HANDLE_GITHUB, HANDLE_COMMIT_LEN>(
-            handle,
-            handle_len,
-            blinder_handle,
-        ))
-            == handle_commitment,
-        "handle commitment mismatch",
-    );
-
-    // 4. The keys.
-    assert(
-        halves(
-            tagged_hash::<20, MAX_ID_GITHUB, ID_NODE_LEN>(USER_ID_TAG_GITHUB, id, id_len),
-        )
-            == id_node,
-        "id node mismatch",
-    );
-    assert(
-        halves(tagged_hash::<19, MAX_HANDLE_GITHUB, HANDLE_NODE_LEN>(
-            HANDLE_TAG_GITHUB,
-            folded,
-            handle_len,
-        ))
-            == handle_node,
-        "handle node mismatch",
+        id_commitment,
+        handle_commitment,
+        id_node,
+        handle_node,
     );
 }
 

@@ -32,22 +32,10 @@
 
 use libid_identity::{
     BLINDER_LEN,
-    check_id,
-    constrain_bearer,
-    halves,
-    hash_commit,
+    identity_link,
     MAX_BEARER_LEN,
-    normalize_handle,
     table::{HANDLE_RULES_X, HANDLE_TAG_X, ID_RULES_X, MAX_HANDLE_X, MAX_ID_X, USER_ID_TAG_X},
-    tagged_hash,
-    verify_hash_commit,
 };
-
-global BEARER_COMMIT_LEN: u32 = 144; // MAX_BEARER_LEN + BLINDER_LEN
-global ID_COMMIT_LEN: u32 = 36; // MAX_ID_X + BLINDER_LEN
-global HANDLE_COMMIT_LEN: u32 = 31; // MAX_HANDLE_X + BLINDER_LEN
-global ID_NODE_LEN: u32 = 35; // len(USER_ID_TAG_X) + MAX_ID_X
-global HANDLE_NODE_LEN: u32 = 29; // len(HANDLE_TAG_X) + MAX_HANDLE_X
 
 fn main(
     // --- Private ---
@@ -69,54 +57,27 @@ fn main(
     id_node: pub [Field; 2],
     handle_node: pub [Field; 2],
 ) {
-    // 1. The bearer link.
-    constrain_bearer(bearer, bearer_len);
-    verify_hash_commit::<MAX_BEARER_LEN, BEARER_COMMIT_LEN>(
+    identity_link(
+        USER_ID_TAG_X,
+        HANDLE_TAG_X,
+        ID_RULES_X,
+        HANDLE_RULES_X,
         bearer,
         bearer_len,
         blinder_token,
-        token_commitment,
-    );
-    verify_hash_commit::<MAX_BEARER_LEN, BEARER_COMMIT_LEN>(
-        bearer,
-        bearer_len,
         blinder_identity,
+        id,
+        id_len,
+        blinder_id,
+        handle,
+        handle_len,
+        blinder_handle,
+        token_commitment,
         identity_commitment,
-    );
-
-    // 2-3. The raw values, checked as X sent them. Both checks also require a
-    // zero tail, so the bytes the commitments do not hash are not free.
-    check_id(id, id_len, ID_RULES_X);
-    let folded = normalize_handle(handle, handle_len, HANDLE_RULES_X);
-    assert(
-        halves(
-            hash_commit::<MAX_ID_X, ID_COMMIT_LEN>(id, id_len, blinder_id),
-        )
-            == id_commitment,
-        "id commitment mismatch",
-    );
-    assert(
-        halves(
-            hash_commit::<MAX_HANDLE_X, HANDLE_COMMIT_LEN>(handle, handle_len, blinder_handle),
-        )
-            == handle_commitment,
-        "handle commitment mismatch",
-    );
-
-    // 4. The keys.
-    assert(
-        halves(
-            tagged_hash::<15, MAX_ID_X, ID_NODE_LEN>(USER_ID_TAG_X, id, id_len),
-        )
-            == id_node,
-        "id node mismatch",
-    );
-    assert(
-        halves(
-            tagged_hash::<14, MAX_HANDLE_X, HANDLE_NODE_LEN>(HANDLE_TAG_X, folded, handle_len),
-        )
-            == handle_node,
-        "handle node mismatch",
+        id_commitment,
+        handle_commitment,
+        id_node,
+        handle_node,
     );
 }
 
@@ -247,7 +208,14 @@ fn a_handle_other_than_the_committed_one_is_refused() {
     run(c);
 }
 
-#[test(should_fail_with = "hash commit mismatch")]
+#[test(should_fail_with = "token bearer commitment mismatch")]
+fn the_identity_session_s_commitment_as_the_token_s_is_refused() {
+    let mut c = case();
+    c.token_commitment = c.identity_commitment;
+    run(c);
+}
+
+#[test(should_fail_with = "identity bearer commitment mismatch")]
 fn another_session_s_bearer_commitment_is_refused() {
     let mut c = case();
     c.identity_commitment = c.token_commitment;
