@@ -9,6 +9,7 @@ use libid_identity::{
         USER_ID_TAG_GOOGLE,
     },
     tagged_hash,
+    testing::padded,
 };
 use noir_base64::BASE64_URL_ENCODER;
 use noir_rsa::rsa::verify_sha256_pkcs1v15;
@@ -404,15 +405,6 @@ fn nonce_encoding_matches_external_vectors() {
 
 // The vectors below are Python `hashlib.sha256` of the tag and the `sub`, so
 // they check the circuit against an oracle outside the Noir ecosystem.
-fn padded_sub<let N: u32>(text: str<N>) -> [u8; SUB_MAX] {
-    let bytes = text.as_bytes();
-    let mut sub: [u8; SUB_MAX] = [0; SUB_MAX];
-    for i in 0..N {
-        sub[i] = bytes[i];
-    }
-    sub
-}
-
 #[test]
 fn user_id_digest_matches_an_independent_vector() {
     // hashlib.sha256(b"libid.google.user-id" + b"123456789012345678901")
@@ -421,7 +413,7 @@ fn user_id_digest_matches_an_independent_vector() {
         0xb7, 0x49, 0xaa, 0xfb, 0x1d, 0xb3, 0x39, 0x0c, 0xb5, 0x3e, 0xc0, 0x3a, 0x8d, 0xb1, 0x39,
         0xf2, 0xc7,
     ];
-    let got = user_id_digest(padded_sub("123456789012345678901"), 21);
+    let got = user_id_digest(padded("123456789012345678901".as_bytes()), 21);
     for i in 0..32 {
         assert(got[i] == expected[i], "id node disagrees with the hashlib vector");
     }
@@ -439,7 +431,7 @@ fn user_id_digest_covers_the_shortest_and_longest_sub() {
         0x33, 0xf4, 0x7e, 0x48, 0x60, 0x52, 0x33, 0xe3, 0xb6, 0xc1, 0xe9, 0xe6, 0x5e, 0xa6, 0x0e,
         0xaf, 0x99,
     ];
-    let got = user_id_digest(padded_sub("1"), 1);
+    let got = user_id_digest(padded("1".as_bytes()), 1);
     for i in 0..32 {
         assert(got[i] == one[i], "one-byte sub digest disagrees");
     }
@@ -449,7 +441,10 @@ fn user_id_digest_covers_the_shortest_and_longest_sub() {
         0xc6, 0x41, 0x89, 0xa0, 0xab, 0x5a, 0xe9, 0x4d, 0x9e, 0xcc, 0x9d, 0x82, 0xc8, 0x30, 0x98,
         0x9d, 0xcf,
     ];
-    let got = user_id_digest(padded_sub("!~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"), SUB_MAX);
+    let got = user_id_digest(
+        padded("!~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~".as_bytes()),
+        SUB_MAX,
+    );
     for i in 0..32 {
         assert(got[i] == full[i], "31-byte sub digest disagrees");
     }
@@ -459,7 +454,7 @@ fn user_id_digest_covers_the_shortest_and_longest_sub() {
 // `ID_RULES_GOOGLE`: printable ASCII without `"` or `\`.
 
 fn sub_with(byte: u8) -> [u8; SUB_MAX] {
-    let mut sub = padded_sub("1");
+    let mut sub: [u8; SUB_MAX] = padded("1".as_bytes());
     sub[1] = byte;
     sub
 }
@@ -497,6 +492,38 @@ fn a_quote_in_sub_is_refused() {
 #[test(should_fail_with = "id byte not allowed")]
 fn a_backslash_in_sub_is_refused() {
     check_id(sub_with(0x5c), 2, ID_RULES_GOOGLE);
+}
+
+#[test(should_fail_with = "id tail must be zero-padded")]
+fn bytes_past_the_sub_are_refused() {
+    // Only `sub_len` bytes are hashed into the id node; the tail is pinned.
+    check_id(sub_with(0x31), 1, ID_RULES_GOOGLE);
+}
+
+// The address's rules are lib/identity's `normalize_handle` under
+// `HANDLE_RULES_GOOGLE`; the table's refused Google vectors cover `"` and `\`
+// in a handle and in a `sub` (handles.json, regenerated into table.nr).
+
+#[test]
+fn the_fixture_address_folds() {
+    let email: [u8; EMAIL_MAX] = padded("Fixture@Example.com".as_bytes());
+    let folded = normalize_handle(email, 19, HANDLE_RULES_GOOGLE);
+    let expected: [u8; EMAIL_MAX] = padded("fixture@example.com".as_bytes());
+    assert(folded == expected);
+}
+
+#[test(should_fail_with = "handle byte not allowed")]
+fn a_quote_in_the_address_is_refused() {
+    // A `"` would end the `email` claim's string early in the signed JSON.
+    let email: [u8; EMAIL_MAX] = padded("a\"b@example.com".as_bytes());
+    let _ = normalize_handle(email, 15, HANDLE_RULES_GOOGLE);
+}
+
+#[test(should_fail_with = "handle tail must be zero-padded")]
+fn bytes_past_the_address_are_refused() {
+    let mut email: [u8; EMAIL_MAX] = padded("a@example.com".as_bytes());
+    email[14] = 0x61;
+    let _ = normalize_handle(email, 13, HANDLE_RULES_GOOGLE);
 }
 
 #[test]
