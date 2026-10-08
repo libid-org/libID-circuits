@@ -20,8 +20,8 @@ support, which fits libID's client-side proving use case almost perfectly.
 
 | Circuit | Package | Proves |
 |---|---|---|
-| `circuits/bearer-link` | `bearer_link` | One hidden OAuth bearer opens both of a ceremony's blinded commitments — the token session's and the identity session's. Exactly two public inputs and nothing else: the credential never leaves the circuit, and the two sessions are tied together without publishing anything that identifies them. Serves X and GitHub, whose statements are byte-identical. |
 | `circuits/bearer-link-x` | `bearer_link_x` | X's bearer link plus the account as keys. The identity response reveals only the anchors around `id` and `username`; the circuit opens the two committed values as X sent them, checks them against X's rules, folds the handle, and outputs `idNode = SHA256("libid.x.user-id" \|\| id)` and `handleNode = SHA256("libid.x.handle" \|\| fold(handle))`. 72 public inputs: the two bearer commitments (64 bytes), then the id and handle commitments and the two nodes as 16-byte halves. Neither value reaches the chain. |
+| `circuits/bearer-link-github` | `bearer_link_github` | The same relation for GitHub: the bearer link, and the committed `id` (a JSON integer, its digits alone) and `login` opened, checked against GitHub's rules, the login folded, and output as `SHA256("libid.github.user-id" \|\| id)` and `SHA256("libid.github.handle" \|\| fold(login))`. The same 72 public inputs. |
 | `circuits/oidc-google` | `oidc_google` | Possession of a Google OIDC JWT: verifies the RSASSA-PKCS1-v1_5 signature over `header.payload` and exposes the Authorization Digest carried in `nonce`, `SHA256(aud)`, the canonical `userId` `SHA256("libid.google-user-id" \|\| sub)` (the `sub` itself stays private), the raw `email` bytes, `exp`, and the modulus that verified. The Platform Verifier alone decides whether that modulus is trusted. |
 
 Sources were extracted byte-verbatim from the original monorepo and then
@@ -43,8 +43,10 @@ scripts/regen-identity-handles.py --noir-out ../libid-circuits/lib/identity/src/
 `scripts/build.sh` writes that table's SHA-256 to `handles.json.sha256` beside
 the artifacts, so a consumer can tell a verifier built from another table.
 
-`scripts/identity-link-witness.py` writes a `bearer-link-x` `Prover.toml` from
-the identity-link witness libid-rs emits with a ceremony record.
+`scripts/identity-link-witness.py` writes a `bearer-link-x` or
+`bearer-link-github` `Prover.toml` from the identity-link witness libid-rs
+emits with a ceremony record. The committed ones are libid-rs' synthetic X
+and GitHub fixtures, whose handles (`Alice_1`, `OctoCat`) exercise the fold.
 
 ## Toolchain
 
@@ -100,7 +102,7 @@ refuse to run under any other version.
 - `<Contract>.sol` — the EVM Solidity verifier
   (`bb write_solidity_verifier -t evm --optimized` on the vk, see
   "Regenerating a Solidity verifier"), the contract named after the circuit
-  directory: `bearer-link/BearerLinkHonkVerifier.sol`,
+  directory: `bearer-link-x/BearerLinkXHonkVerifier.sol`,
   `oidc-google/OidcGoogleHonkVerifier.sol`.
 
 ```sh
@@ -120,7 +122,7 @@ step it runs per circuit, and regenerates one from a vk alone — no nargo —
 for example to byte-compare an unpacked release against a local `bb`:
 
 ```sh
-scripts/gen-verifier.sh bearer-link                          # artifacts/bearer-link/BearerLinkHonkVerifier.sol
+scripts/gen-verifier.sh bearer-link-x                        # artifacts/bearer-link-x/BearerLinkXHonkVerifier.sol
 scripts/gen-verifier.sh oidc-google --artifacts ~/unpacked   # from a downloaded release's vk
 scripts/gen-verifier.sh oidc-google Verifier.sol --contract-name HonkVerifier
 ```
@@ -159,7 +161,7 @@ additional_compiler_profiles = [{ name = "verifiers", via_ir = false }]
 compilation_restrictions = [{ paths = "contracts/circuits/*HonkVerifier.sol", via_ir = false }]
 ```
 
-Both fit EIP-170's runtime size limit on the legacy pipeline with the
+All three fit EIP-170's runtime size limit on the legacy pipeline with the
 optimizer on.
 
 `scripts/check-verifiers.sh` compiles every verifier that way, then proves
@@ -199,7 +201,8 @@ Verification keys under the pinned toolchain (nargo 1.0.0-rc.3, bb 6.0.0-rc.2):
 
 | Circuit | vk_hash |
 |---|---|
-| `bearer-link` | `0x03d91fecc776e03f12331b31a3231d984a385682fb1a18a841e363cef0624184` |
+| `bearer-link-x` | `0x1f09866b4c8feca602a2d394a5c8c924d3b8d964696f0214252ab97c9213775d` |
+| `bearer-link-github` | `0x1168344f46c63b1fa251c174f4b4d4e7c104cf65ab38d36fcbcf66108e626770` |
 | `oidc-google` | `0x1fa1426da50e1a46d0e50035a3307e1c322b54875cbde06339dcf5d8bd043801` |
 
 The Google key has moved three times since the value this section cited before

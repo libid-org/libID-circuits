@@ -16,8 +16,8 @@
 #                   consumer is an EVM Solidity verifier)
 #   vk_hash         32-byte hash of the vk, as written by the same command
 #   <Contract>.sol  the EVM Solidity verifier bb derives from the vk, the
-#                   contract named after the circuit (bearer-link ->
-#                   BearerLinkHonkVerifier); see scripts/gen-verifier.sh.
+#                   contract named after the circuit (bearer-link-x ->
+#                   BearerLinkXHonkVerifier); see scripts/gen-verifier.sh.
 #                   Ships so that consumers compile it and never run bb.
 #
 # The vk derives from the ACIR bytecode alone, and the Solidity verifier from
@@ -111,8 +111,9 @@ done
 # The handles.json the identity circuits' rules and tags were generated from.
 # A consumer compares it with its own copy: a verifier for a circuit built from
 # another table keys handles another way.
-sed -n 's/^pub global TABLE_SHA256: str<64> = "\([0-9a-f]\{64\}\)";$/\1/p' \
-  "$ROOT/lib/identity/src/table.nr" > "$OUT/handles.json.sha256"
+# nargo fmt may wrap the constant onto the next line, so read it whole.
+tr '\n' ' ' < "$ROOT/lib/identity/src/table.nr" |
+  sed -n 's/.*pub global TABLE_SHA256: str<64> = *"\([0-9a-f]\{64\}\)".*/\1/p' > "$OUT/handles.json.sha256"
 [[ -s "$OUT/handles.json.sha256" ]] || { echo "error: no TABLE_SHA256 in lib/identity/src/table.nr" >&2; exit 1; }
 
 echo "OK: artifacts written to $OUT"

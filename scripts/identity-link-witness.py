@@ -23,6 +23,7 @@ import argparse
 import hashlib
 import json
 import pathlib
+import re
 import sys
 
 MAX_BEARER = 128
@@ -33,15 +34,16 @@ TABLE = pathlib.Path(__file__).resolve().parent.parent / "lib" / "identity" / "s
 
 
 def table_constant(name: str) -> str:
-    for line in TABLE.read_text().splitlines():
-        if line.startswith(f"pub global {name}:"):
-            return line.split("=", 1)[1].strip().rstrip(";")
-    raise SystemExit(f"{TABLE}: no {name}")
+    # nargo fmt wraps long constants, so read the declaration whole.
+    found = re.search(rf"pub global {name}:[^=]*=\s*([^;]*);", TABLE.read_text())
+    if found is None:
+        raise SystemExit(f"{TABLE}: no {name}")
+    return " ".join(found.group(1).split())
 
 
 def table_bytes(name: str) -> bytes:
     inner = table_constant(name).strip("[]")
-    return bytes(int(b, 16) for b in inner.split(","))
+    return bytes(int(b, 16) for b in inner.split(",") if b.strip())
 
 
 def halves(digest: bytes) -> list[str]:

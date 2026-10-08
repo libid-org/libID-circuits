@@ -18,8 +18,8 @@ name: Release
 # bytes.
 #
 # bb runs here and nowhere else. The Solidity verifier derives from the vk
-# alone, so scripts/build.sh writes it next to the vk (bearer-link ->
-# BearerLinkHonkVerifier.sol) and it ships in the same tarball. Consumers
+# alone, so scripts/build.sh writes it next to the vk (bearer-link-x ->
+# BearerLinkXHonkVerifier.sol) and it ships in the same tarball. Consumers
 # download by pinned tag, check the tarball and the .sol against the
 # manifest's sha256s, run `forge fmt` under their own foundry.toml, and
 # compile — no bb, no nargo downstream.

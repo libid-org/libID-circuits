@@ -1,0 +1,8 @@
+[package]
+name = "bearer_link_github"
+type = "bin"
+authors = ["libID"]
+compiler_version = ">=1.0.0"
+
+[dependencies]
+libid_identity = { path = "../../lib/identity" }
