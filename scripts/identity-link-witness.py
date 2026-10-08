@@ -154,6 +154,8 @@ def main() -> int:
     args = parser.parse_args()
 
     doc = json.loads(args.witness.read_text())
+    if not isinstance(doc, dict):
+        doc = {}
     if "identity_link_witness" in doc:
         witness, secret = doc["identity_link_witness"], False
     elif "token_bearer" in doc:

@@ -35,7 +35,7 @@ EMAIL = "Fixture@Example.com"
 AUD = "000000000000-libidfixture.apps.googleusercontent.com"
 # `authorization_digest` of libid-rs' x and github ceremony session fixtures
 # (`cargo run -p libid-tlsn --example ceremony_fixtures`, chain 31337). It is
-# restated, not read: those fixtures live in libid-rs and libid-contracts.
+# restated, not read: those fixtures live in libid-rs and libID-contracts.
 DIGEST = bytes.fromhex("6beb766c7835d641b3800e8e4c03616d386251c86dcb8b640e59cec9ba42a01f")
 IAT = 1893452400
 EXP = 1893456000

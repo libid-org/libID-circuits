@@ -29,12 +29,12 @@ CI enforces `nargo fmt --check` on every package.
 `lib/identity` is the library the identity circuits share: commitment
 openings, the tagged node hash, the handle and id rules, and `identity_link`,
 the relation both bearer-link circuits run with their platform's constants. Its constants and
-its test table, `src/table.nr`, are generated from libid-contracts'
+its test table, `src/table.nr`, are generated from libID-contracts'
 `solidity/contracts/handles/handles.json`, the table Solidity, Rust and
 TypeScript run too:
 
 ```sh
-# from a libid-contracts checkout, with nargo on PATH
+# from a libID-contracts checkout, with nargo on PATH
 scripts/regen-identity-handles.py --noir-out ../libid-circuits/lib/identity/src/table.nr
 ```
 
