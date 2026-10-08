@@ -8,7 +8,9 @@ name: CI
 # never committed and ship exclusively as release assets, rebuilt from
 # source by release.yml.
 # `handles-table` checks lib/identity's generated table against
-# libID-contracts' handles.json at the commit contracts.ref pins.
+# libID-contracts' handles.json, and the vendored witness fixtures and the
+# Google fixture's digest against its ceremony session fixtures, at the
+# commit contracts.ref pins.
 # `dco` checks the Signed-off-by trailer CONTRIBUTING.md promises.
 #
 # Every third-party action is pinned by commit SHA, with the tag in a
@@ -186,8 +188,10 @@ jobs:
   # ---------------------------------------------------------------------------
   # Handle table: lib/identity/src/table.nr is what libID-contracts'
   # handles.json generates, at the commit contracts.ref pins. The comparison
-  # is libID-contracts' own generator, so no rule is restated here; it needs
-  # Python alone.
+  # is libID-contracts' own generator, so no rule is restated here. At the
+  # same commit, the vendored fixtures are the ceremony session fixtures'
+  # witnesses and oidc-google's digest is theirs. It needs git and Python
+  # alone.
   # ---------------------------------------------------------------------------
   handles-table:
     name: Handle table
@@ -204,14 +208,50 @@ jobs:
           [[ "$ref" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::contracts.ref must hold one full commit SHA"; exit 1; }
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: libid-org/libID-contracts
-          ref: ${{ steps.pin.outputs.ref }}
-          path: libid-contracts
+      # Plain git rather than actions/checkout, so a missing commit fails with
+      # the fix named: contracts.ref must be reachable from a branch
+      # libID-contracts serves, which after a merge is its main.
+      - name: Check out libID-contracts at the pin
+        env:
+          REF: ${{ steps.pin.outputs.ref }}
+        run: |
+          set -euo pipefail
+          git init -q libid-contracts
+          git -C libid-contracts remote add origin https://github.com/libid-org/libID-contracts.git
+          if ! git -C libid-contracts fetch -q --depth 1 origin "$REF"; then
+            echo "::error::libID-contracts serves no commit $REF (contracts.ref); a commit only on an unpushed or deleted branch cannot be fetched. Merge the libID-contracts change first, then point contracts.ref at its commit on libID-contracts' main (README, contracts.ref)."
+            exit 1
+          fi
+          git -C libid-contracts checkout -q FETCH_HEAD
 
       - name: table.nr matches handles.json
         run: python3 libid-contracts/scripts/regen-identity-handles.py --compare-noir "$GITHUB_WORKSPACE/lib/identity/src/table.nr"
+
+      # The vendored witnesses are the session fixtures' `identity_link_witness`
+      # members, and oidc-google's nonce is their Authorization Digest.
+      - name: Fixtures match libID-contracts' session fixtures
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import importlib.util, json, pathlib, sys
+
+          sessions = pathlib.Path("libid-contracts/solidity/contracts/ceremony/test/fixtures")
+          sys.path.insert(0, "scripts")  # google-fixture-witness.py imports identity_table beside it
+          spec = importlib.util.spec_from_file_location("google_fixture", "scripts/google-fixture-witness.py")
+          google = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(google)
+          failed = False
+          for platform in ("x", "github"):
+              session = json.loads((sessions / f"{platform}-ceremony-session.json").read_text())
+              vendored = json.loads(pathlib.Path(f"fixtures/{platform}-identity-link-witness.json").read_text())
+              if vendored["identity_link_witness"] != session["identity_link_witness"]:
+                  print(f"::error::fixtures/{platform}-identity-link-witness.json differs from {platform}-ceremony-session.json's identity_link_witness; copy it again")
+                  failed = True
+              if session["authorization_digest"] != "0x" + google.DIGEST.hex():
+                  print(f"::error::scripts/google-fixture-witness.py's DIGEST differs from {platform}-ceremony-session.json's authorization_digest {session['authorization_digest']}")
+                  failed = True
+          sys.exit(failed)
+          PY
 
   # ---------------------------------------------------------------------------
   # DCO: every commit carries a Signed-off-by trailer, as CONTRIBUTING.md

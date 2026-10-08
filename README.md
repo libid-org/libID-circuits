@@ -43,11 +43,26 @@ scripts/regen-identity-handles.py --noir-out ../libid-circuits/lib/identity/src/
 table.
 
 `contracts.ref` pins the libID-contracts commit whose `handles.json` this
-table must match. CI checks out that commit and runs its
+table must match. CI fetches that commit and runs its
 `scripts/regen-identity-handles.py --compare-noir` against
-`lib/identity/src/table.nr`; it needs only Python. To move the pin after
-regenerating the table from a newer `handles.json`, write the new commit's
-full SHA, which must be pushed to libID-contracts:
+`lib/identity/src/table.nr`. At the same commit it checks that
+`fixtures/{x,github}-identity-link-witness.json` hold the
+`identity_link_witness` members of
+`solidity/contracts/ceremony/test/fixtures/{x,github}-ceremony-session.json`,
+and that `scripts/google-fixture-witness.py`'s `DIGEST` is those sessions'
+`authorization_digest`. It needs git and Python only.
+
+The pin must name a commit libID-contracts serves. A change that spans both
+repositories merges in this order:
+
+1. merge the libID-contracts change (its `handles.json`, its session
+   fixtures) into libID-contracts' main;
+2. point `contracts.ref` at the resulting commit on main, then merge here.
+
+A pin to a commit that exists only on a feature branch passes while that
+branch exists and fails once it is deleted after a squash or rebase merge;
+the CI error names this fix. To move the pin after regenerating the table
+from a newer `handles.json`, write the new commit's full SHA:
 
 ```sh
 git -C ../libid-contracts rev-parse HEAD > contracts.ref
