@@ -4,7 +4,9 @@
 `solidity/contracts/handles/handles.json`: the platform tags and the buffer
 sizes. `lib/identity/src/lib.nr` holds the bearer cap, and
 `circuits/oidc-google/src/main.nr` the JWT buffers and the RSA limb layout.
-The witness scripts read them here so no size or tag is written down twice.
+The witness scripts read them here so no size or tag is written down twice,
+and share the encodings below: the fold, the `[high, low]` halves a circuit
+takes a 32-byte value as, and the zero-padded buffers.
 """
 from __future__ import annotations
 
@@ -38,6 +40,18 @@ def byte_array(name: str, source: pathlib.Path = TABLE) -> bytes:
 def fold(value: bytes) -> bytes:
     """A-Z down to a-z, every other byte unchanged: lib.nr's `fold`."""
     return bytes(b + 0x20 if 0x41 <= b <= 0x5A else b for b in value)
+
+
+def halves(digest: bytes) -> tuple[int, int]:
+    """A 32-byte digest as the circuits' `[high, low]` 16-byte big-endian halves."""
+    return int.from_bytes(digest[:16], "big"), int.from_bytes(digest[16:], "big")
+
+
+def padded(name: str, value: bytes, size: int) -> list[int]:
+    """`value` in a `size`-byte circuit buffer, the tail zero."""
+    if len(value) > size:
+        raise SystemExit(f"`{name}`: {len(value)} bytes do not fit the circuit's {size}-byte buffer")
+    return list(value) + [0] * (size - len(value))
 
 
 def package(circuit: pathlib.Path) -> str:

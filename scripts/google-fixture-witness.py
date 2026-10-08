@@ -121,13 +121,8 @@ def limbs(value: int) -> list[str]:
     return [hex((value >> (LIMB_BITS * i)) & mask) for i in range(NUM_LIMBS)]
 
 
-def halves(digest: bytes) -> list[str]:
-    return ["0x" + digest[:16].hex(), "0x" + digest[16:].hex()]
-
-
-def padded(data: bytes, size: int) -> list[int]:
-    assert len(data) <= size, (len(data), size)
-    return list(data) + [0] * (size - len(data))
+def hex_halves(digest: bytes) -> list[str]:
+    return [f"0x{half:032x}" for half in identity_table.halves(digest)]
 
 
 def toml_list(values) -> str:
@@ -176,10 +171,10 @@ def main() -> int:
         f"# signed by a seeded synthetic RSA-2048 key, `sub` {SUB}, `email` {EMAIL}.",
         "# scripts/check-verifiers.sh proves it and verifies the proof natively and",
         "# with the Solidity verifier.",
-        f"signing_input = {toml_list(padded(signing_input, SIGNING_INPUT_MAX))}",
+        f"signing_input = {toml_list(identity_table.padded('signing_input', signing_input, SIGNING_INPUT_MAX))}",
         f'signing_input_len = "{len(signing_input)}"',
         f'header_b64_len = "{len(b64url(header))}"',
-        f"payload_json = {toml_list(padded(payload, PAYLOAD_JSON_MAX))}",
+        f"payload_json = {toml_list(identity_table.padded('payload_json', payload, PAYLOAD_JSON_MAX))}",
         f'payload_json_len = "{len(payload)}"',
         f'email_offset = "{at(chr(34) + "email" + chr(34) + ":")}"',
         f'nonce_offset = "{at(chr(34) + "nonce" + chr(34) + ":")}"',
@@ -189,18 +184,18 @@ def main() -> int:
         f'exp_len = "{len(exp_digits)}"',
         f'iss_offset = "{at(chr(34) + "iss" + chr(34) + ":")}"',
         f'aud_offset = "{at(chr(34) + "aud" + chr(34) + ":")}"',
-        f"email_bytes = {toml_list(padded(EMAIL.encode(), EMAIL_MAX))}",
+        f"email_bytes = {toml_list(identity_table.padded('email_bytes', EMAIL.encode(), EMAIL_MAX))}",
         f'email_len = "{len(EMAIL)}"',
-        f"sub_bytes = {toml_list(padded(SUB.encode(), SUB_MAX))}",
+        f"sub_bytes = {toml_list(identity_table.padded('sub_bytes', SUB.encode(), SUB_MAX))}",
         f'sub_len = "{len(SUB)}"',
-        f"audience_bytes = {toml_list(padded(AUD.encode(), AUDIENCE_MAX))}",
+        f"audience_bytes = {toml_list(identity_table.padded('audience_bytes', AUD.encode(), AUDIENCE_MAX))}",
         f'audience_len = "{len(AUD)}"',
         f"signature = {toml_list(limbs(signature))}",
         f"redc = {toml_list(limbs((1 << (2 * MOD_BITS + 6)) // n))}",
         f"authorization_digest = {toml_list(list(DIGEST))}",
-        f"audience_hash = {toml_list(halves(hashlib.sha256(AUD.encode()).digest()))}",
-        f"id_node = {toml_list(halves(hashlib.sha256(USER_ID_TAG + SUB.encode()).digest()))}",
-        f"handle_node = {toml_list(halves(hashlib.sha256(HANDLE_TAG + folded).digest()))}",
+        f"audience_hash = {toml_list(hex_halves(hashlib.sha256(AUD.encode()).digest()))}",
+        f"id_node = {toml_list(hex_halves(hashlib.sha256(USER_ID_TAG + SUB.encode()).digest()))}",
+        f"handle_node = {toml_list(hex_halves(hashlib.sha256(HANDLE_TAG + folded).digest()))}",
         f'exp = "{EXP}"',
         f"modulus = {toml_list(limbs(n))}",
     ]

@@ -52,16 +52,6 @@ import identity_table  # noqa: E402  (beside this script)
 PLATFORMS = ("x", "github")
 
 
-def halves(digest: bytes) -> list[str]:
-    return [str(int.from_bytes(digest[:16], "big")), str(int.from_bytes(digest[16:], "big"))]
-
-
-def padded(name: str, value: bytes, size: int) -> list[int]:
-    if len(value) > size:
-        raise SystemExit(f"witness entry `{name}`: {len(value)} bytes do not fit the circuit's {size}-byte buffer")
-    return list(value) + [0] * (size - len(value))
-
-
 def classified(path: pathlib.Path) -> tuple[dict, bool]:
     """The witness in `path` and whether it is secret.
 
@@ -266,22 +256,22 @@ def main() -> int:
             f"# a synthetic {witness['platform']} ceremony witness. scripts/check-verifiers.sh proves it.",
         ]
     lines = header + [
-        f"bearer = {toml_array(padded('token_bearer', bearer, max_bearer))}",
+        f"bearer = {toml_array(identity_table.padded('token_bearer', bearer, max_bearer))}",
         f'bearer_len = "{len(bearer)}"',
         f"blinder_token = {toml_array(blinder_token)}",
         f"blinder_identity = {toml_array(blinder_identity)}",
-        f"id = {toml_array(padded('id', user_id, max_id))}",
+        f"id = {toml_array(identity_table.padded('id', user_id, max_id))}",
         f'id_len = "{len(user_id)}"',
         f"blinder_id = {toml_array(blinder_id)}",
-        f"handle = {toml_array(padded('handle', handle, max_handle))}",
+        f"handle = {toml_array(identity_table.padded('handle', handle, max_handle))}",
         f'handle_len = "{len(handle)}"',
         f"blinder_handle = {toml_array(blinder_handle)}",
         f"token_commitment = {toml_array(commitment(witness['token_bearer']))}",
         f"identity_commitment = {toml_array(commitment(witness['identity_bearer']))}",
-        f"id_commitment = {toml_array(halves(commitment(witness['id'])))}",
-        f"handle_commitment = {toml_array(halves(commitment(witness['handle'])))}",
-        f"id_node = {toml_array(halves(hashlib.sha256(id_tag + user_id).digest()))}",
-        f"handle_node = {toml_array(halves(hashlib.sha256(handle_tag + folded).digest()))}",
+        f"id_commitment = {toml_array(identity_table.halves(commitment(witness['id'])))}",
+        f"handle_commitment = {toml_array(identity_table.halves(commitment(witness['handle'])))}",
+        f"id_node = {toml_array(identity_table.halves(hashlib.sha256(id_tag + user_id).digest()))}",
+        f"handle_node = {toml_array(identity_table.halves(hashlib.sha256(handle_tag + folded).digest()))}",
     ]
     text = "\n".join(lines) + "\n"
     if args.out is None:
