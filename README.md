@@ -40,8 +40,10 @@ TypeScript run too:
 scripts/regen-identity-handles.py --noir-out ../libid-circuits/lib/identity/src/table.nr
 ```
 
-`scripts/build.sh` writes that table's SHA-256 to `handles.json.sha256` beside
-the artifacts, so a consumer can tell a verifier built from another table.
+`scripts/build.sh` copies the table into each identity circuit's artifacts as
+`handles-table.nr`, with the SHA-256 of the `handles.json` it was generated
+from in `handles.json.sha256`, so a consumer can tell a verifier built from
+another table.
 
 `scripts/identity-link-witness.py` writes a `bearer-link-x` or
 `bearer-link-github` `Prover.toml` from the identity-link witness libid-rs
@@ -185,7 +187,9 @@ Publishing a GitHub Release tagged `v<version>` builds the artifacts from
 source with the pinned toolchain (`scripts/build.sh`) and attaches:
 
 - `libid-circuits-<version>-<circuit>.tar.gz` — one per circuit, containing
-  `<package>.json`, `vk`, `vk_hash`, `<Contract>.sol`;
+  `<package>.json`, `vk`, `vk_hash`, `<Contract>.sol`, and for the identity
+  circuits (`bearer-link-x`, `bearer-link-github`, `oidc-google`)
+  `handles-table.nr` and `handles.json.sha256`;
 - `manifest.json` — `{version, tag, toolchain: {nargo, bb}, tarballs:
   {<tarball>: {sha256, files: {<name>: sha256}}}}`.
 
@@ -197,6 +201,11 @@ against its entry in `files`, run `forge fmt` over it under your own
 `foundry.toml`, and compile it without via_ir (see "Compiling a verifier").
 No `bb`, no nargo: the verifier is derived here, once, by the toolchain the
 manifest names.
+
+For an identity circuit, also compare `handles.json.sha256` with the SHA-256
+of your `handles.json`, and `handles-table.nr` with what libid-contracts'
+`scripts/regen-identity-handles.py` generates from it. A mismatch means the
+verifier keys handles by another table.
 
 Verification keys under the pinned toolchain (nargo 1.0.0-rc.3, bb 6.0.0-rc.2):
 

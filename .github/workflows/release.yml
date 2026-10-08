@@ -6,7 +6,10 @@ name: Release
 #
 #   libid-circuits-<version>-<circuit>.tar.gz   one per circuit, containing
 #                                               <package>.json, vk, vk_hash,
-#                                               <Contract>.sol
+#                                               <Contract>.sol, and for an
+#                                               identity circuit
+#                                               handles-table.nr and
+#                                               handles.json.sha256
 #   manifest.json                               version, toolchain pins, and
 #                                               sha256 of every tarball and
 #                                               every file inside them
