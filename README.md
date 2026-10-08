@@ -129,6 +129,27 @@ witness, which holds the bearer too, to
 keeping the mode of an existing one (group-readable after an ordinary build):
 delete `target/*.gz` after proving.
 
+### Consumers that must move
+
+The three circuits replace v0.6.0's ABIs: the shared `bearer_link` circuit
+(two public inputs, the bearer commitments) becomes `bearer_link_x` and
+`bearer_link_github` (72 each), and `oidc_google`'s `user_id_hash` and
+`email_packed` become `id_node` and `handle_node`. Every prover and verifier
+pinned to v0.6.0 moves with them:
+
+- libID's browser prover, `ts/packages/ceremony` on libID's main, pins
+  libid-circuits v0.6.0: it proves the shared `bearer_link` circuit for X and
+  GitHub and v0.6.0's `oidc_google` ABI. It must commit the identity
+  response's id and handle each as its own range, as libid-rs does, pass
+  their openings and nodes to the platform's bearer-link circuit, take
+  `oidc_google`'s new node inputs, and pin the first release that ships
+  these circuits.
+- libID-contracts deploys the verifiers of that same release, and its
+  `handles.json` at `contracts.ref` is the table they are built from.
+
+None of these circuits is released yet; the release after v0.6.0 carries
+them, and the browser prover and the verifiers move to it together.
+
 ## Toolchain
 
 `toolchain.env` is the single source of truth:

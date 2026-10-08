@@ -95,9 +95,10 @@ fn main(
     signature: [u128; NUM_LIMBS],
     redc: [u128; NUM_LIMBS],
     // ---- public inputs ----
-    // Exactly the public inputs REQ-PLAT-16B fixes, in the order it lists.
-    // The Authorization Digest binds the operation, chain and Platform
-    // Ceremony Version, so no chain id appears here.
+    // REQ-PLAT-16B's public inputs, in its order, with the id and handle
+    // nodes in place of its `userId` digest and raw `email`. The
+    // Authorization Digest binds the operation, chain and Platform Ceremony
+    // Version, so no chain id appears here.
     authorization_digest: pub [u8; DIGEST_LEN],
     // Full SHA-256(client_id), packed as two big-endian 16-byte Fields.
     audience_hash: pub [Field; 2],
