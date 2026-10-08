@@ -91,7 +91,12 @@ def refuse_secret_destination(out: pathlib.Path | None) -> None:
 
 def write_owner_only(out: pathlib.Path, text: str) -> None:
     """Write `text` to `out`, readable by the owner alone (0600)."""
-    fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+    try:
+        fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+    except OSError as e:
+        raise SystemExit(
+            f"cannot write {out}: {e.strerror}; pass --out a regular file in an existing directory, not a symlink"
+        ) from None
     with os.fdopen(fd, "w") as f:
         # The open mode applies only to a new file; an existing one keeps its
         # mode until this, which runs before any byte is written.
