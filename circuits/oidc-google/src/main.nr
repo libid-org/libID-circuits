@@ -4,7 +4,10 @@ use libid_identity::{
     check_id,
     halves,
     normalize_handle,
-    table::{HANDLE_RULES_GOOGLE, HANDLE_TAG_GOOGLE, ID_RULES_GOOGLE, USER_ID_TAG_GOOGLE},
+    table::{
+        HANDLE_RULES_GOOGLE, HANDLE_TAG_GOOGLE, ID_RULES_GOOGLE, MAX_HANDLE_GOOGLE, MAX_ID_GOOGLE,
+        USER_ID_TAG_GOOGLE,
+    },
     tagged_hash,
 };
 use noir_base64::BASE64_URL_ENCODER;
@@ -15,12 +18,12 @@ use sha256::sha256_var;
 global SIGNING_INPUT_MAX: u32 = 1280;
 global PAYLOAD_JSON_MAX: u32 = 768; // must be divisible by 3 (encoder output size formula).
 global PAYLOAD_B64_MAX: u32 = 1024; // = 4 * (PAYLOAD_JSON_MAX / 3) when divisible by 3
-global EMAIL_MAX: u32 = 62; // MAX_HANDLE_GOOGLE
+global EMAIL_MAX: u32 = MAX_HANDLE_GOOGLE;
 global DIGEST_LEN: u32 = 32; // Authorization Digest, common REQ-COMMON-01
 global NONCE_B64_LEN: u32 = 43; // BASE64URL_NOPAD(32 bytes)
-global SUB_MAX: u32 = 31; // Google `sub` is ~21 digits; tag + 31 bytes fit one SHA-256 block
-global USER_ID_TAG_LEN: u32 = 20; // length of `libid.google.user-id`
-global HANDLE_TAG_LEN: u32 = 19; // length of `libid.google.handle`
+global SUB_MAX: u32 = MAX_ID_GOOGLE; // Google `sub` is ~21 digits; tag + 31 bytes fit one SHA-256 block
+global USER_ID_TAG_LEN: u32 = USER_ID_TAG_GOOGLE.len();
+global HANDLE_TAG_LEN: u32 = HANDLE_TAG_GOOGLE.len();
 global AUDIENCE_MAX: u32 = 128;
 global NUM_LIMBS: u32 = 18;
 global MOD_BITS: u32 = 2048;
@@ -452,9 +455,49 @@ fn user_id_digest_covers_the_shortest_and_longest_sub() {
     }
 }
 
-// The `sub`'s byte rules -- printable ASCII without `"` or `\` -- are
-// lib/identity's `check_id` under `ID_RULES_GOOGLE`, tested there against the
-// shared table's Google id vectors.
+// The `sub`'s byte rules are lib/identity's `check_id` under
+// `ID_RULES_GOOGLE`: printable ASCII without `"` or `\`.
+
+fn sub_with(byte: u8) -> [u8; SUB_MAX] {
+    let mut sub = padded_sub("1");
+    sub[1] = byte;
+    sub
+}
+
+#[test]
+fn every_printable_sub_byte_but_quote_and_backslash_is_accepted() {
+    for b in 0x20..0x7f {
+        let byte = b as u8;
+        if (byte != 0x22) & (byte != 0x5c) {
+            check_id(sub_with(byte), 2, ID_RULES_GOOGLE);
+        }
+    }
+}
+
+#[test(should_fail_with = "id byte not allowed")]
+fn a_control_byte_in_sub_is_refused() {
+    check_id(sub_with(0x1f), 2, ID_RULES_GOOGLE);
+}
+
+#[test(should_fail_with = "id byte not allowed")]
+fn delete_in_sub_is_refused() {
+    check_id(sub_with(0x7f), 2, ID_RULES_GOOGLE);
+}
+
+#[test(should_fail_with = "id byte not allowed")]
+fn a_non_ascii_byte_in_sub_is_refused() {
+    check_id(sub_with(0x80), 2, ID_RULES_GOOGLE);
+}
+
+#[test(should_fail_with = "id byte not allowed")]
+fn a_quote_in_sub_is_refused() {
+    check_id(sub_with(0x22), 2, ID_RULES_GOOGLE);
+}
+
+#[test(should_fail_with = "id byte not allowed")]
+fn a_backslash_in_sub_is_refused() {
+    check_id(sub_with(0x5c), 2, ID_RULES_GOOGLE);
+}
 
 #[test]
 fn claim_followed_by_a_structural_byte_is_accepted() {
