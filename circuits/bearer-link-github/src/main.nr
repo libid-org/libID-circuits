@@ -36,6 +36,7 @@ use libid_identity::{
         HANDLE_RULES_GITHUB, HANDLE_TAG_GITHUB, ID_RULES_GITHUB, MAX_HANDLE_GITHUB, MAX_ID_GITHUB,
         USER_ID_TAG_GITHUB,
     },
+    testing::{blinder, padded},
 };
 
 fn main(
@@ -93,9 +94,11 @@ fn main(
 
 struct Case {
     bearer: [u8; MAX_BEARER_LEN],
+    bearer_len: u32,
     id: [u8; MAX_ID_GITHUB],
     id_len: u32,
     handle: [u8; MAX_HANDLE_GITHUB],
+    handle_len: u32,
     token_commitment: [u8; 32],
     identity_commitment: [u8; 32],
     id_commitment: [Field; 2],
@@ -104,28 +107,14 @@ struct Case {
     handle_node: [Field; 2],
 }
 
-fn blinder(from: u8) -> [u8; BLINDER_LEN] {
-    let mut b: [u8; BLINDER_LEN] = [0; BLINDER_LEN];
-    for i in 0..BLINDER_LEN {
-        b[i] = from + i as u8;
-    }
-    b
-}
-
-fn padded<let N: u32, let M: u32>(value: [u8; M]) -> [u8; N] {
-    let mut out: [u8; N] = [0; N];
-    for i in 0..M {
-        out[i] = value[i];
-    }
-    out
-}
-
 fn case() -> Case {
     Case {
         bearer: padded("gho_tok".as_bytes()),
+        bearer_len: 7,
         id: padded("583231".as_bytes()),
         id_len: 6,
         handle: padded("Octo-Cat".as_bytes()),
+        handle_len: 8,
         token_commitment: [
             207, 83, 93, 174, 152, 218, 205, 138, 32, 116, 63, 118, 148, 60, 162, 49, 146, 117, 24,
             80, 183, 204, 31, 63, 28, 72, 222, 122, 37, 29, 22, 5,
@@ -153,14 +142,14 @@ fn case() -> Case {
 fn run(c: Case) {
     main(
         c.bearer,
-        7,
+        c.bearer_len,
         blinder(0),
         blinder(16),
         c.id,
         c.id_len,
         blinder(32),
         c.handle,
-        8,
+        c.handle_len,
         blinder(48),
         c.token_commitment,
         c.identity_commitment,

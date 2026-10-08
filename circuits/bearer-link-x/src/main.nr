@@ -35,6 +35,7 @@ use libid_identity::{
     identity_link,
     MAX_BEARER_LEN,
     table::{HANDLE_RULES_X, HANDLE_TAG_X, ID_RULES_X, MAX_HANDLE_X, MAX_ID_X, USER_ID_TAG_X},
+    testing::{blinder, padded},
 };
 
 fn main(
@@ -92,7 +93,9 @@ fn main(
 
 struct Case {
     bearer: [u8; MAX_BEARER_LEN],
+    bearer_len: u32,
     id: [u8; MAX_ID_X],
+    id_len: u32,
     handle: [u8; MAX_HANDLE_X],
     handle_len: u32,
     token_commitment: [u8; 32],
@@ -103,34 +106,13 @@ struct Case {
     handle_node: [Field; 2],
 }
 
-fn blinder(from: u8) -> [u8; BLINDER_LEN] {
-    let mut b: [u8; BLINDER_LEN] = [0; BLINDER_LEN];
-    for i in 0..BLINDER_LEN {
-        b[i] = from + i as u8;
-    }
-    b
-}
-
 fn case() -> Case {
-    let mut bearer: [u8; MAX_BEARER_LEN] = [0; MAX_BEARER_LEN];
-    let tok = "tok-123".as_bytes();
-    for i in 0..7 {
-        bearer[i] = tok[i];
-    }
-    let mut id: [u8; MAX_ID_X] = [0; MAX_ID_X];
-    let digits = "2244994945".as_bytes();
-    for i in 0..10 {
-        id[i] = digits[i];
-    }
-    let mut handle: [u8; MAX_HANDLE_X] = [0; MAX_HANDLE_X];
-    let name = "Al_1".as_bytes();
-    for i in 0..4 {
-        handle[i] = name[i];
-    }
     Case {
-        bearer,
-        id,
-        handle,
+        bearer: padded("tok-123".as_bytes()),
+        bearer_len: 7,
+        id: padded("2244994945".as_bytes()),
+        id_len: 10,
+        handle: padded("Al_1".as_bytes()),
         handle_len: 4,
         token_commitment: [
             13, 195, 106, 174, 167, 138, 231, 116, 69, 94, 154, 13, 119, 74, 173, 82, 8, 74, 171,
@@ -159,11 +141,11 @@ fn case() -> Case {
 fn run(c: Case) {
     main(
         c.bearer,
-        7,
+        c.bearer_len,
         blinder(0),
         blinder(16),
         c.id,
-        10,
+        c.id_len,
         blinder(32),
         c.handle,
         c.handle_len,

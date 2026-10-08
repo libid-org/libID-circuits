@@ -2,7 +2,8 @@
 // comes from an independent Python computation (hashlib over the bytes
 // written out in the comment), not from this library.
 
-use crate::{BLINDER_LEN, constrain_bearer, hash_commit, MAX_BEARER_LEN, table};
+use crate::{BLINDER_LEN, check_id, constrain_bearer, hash_commit, MAX_BEARER_LEN, table};
+use crate::testing::padded;
 
 // --- constrain_bearer -------------------------------------------------------
 
@@ -141,6 +142,17 @@ fn independent_blinders_give_different_commitments() {
     let b =
         hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(bearer, MAX_BEARER_LEN, other);
     assert(a != b);
+}
+
+// --- check_id ---------------------------------------------------------------
+
+#[test(should_fail_with = "id tail must be zero-padded")]
+fn bytes_past_the_id_are_refused() {
+    // The commitment and the node hash only `len` bytes; a byte past them
+    // would be free unless the tail is pinned to zero.
+    let mut id: [u8; table::MAX_ID_X] = padded("2244994945".as_bytes());
+    id[11] = 0x31;
+    check_id(id, 10, table::ID_RULES_X);
 }
 
 // --- The table's buffers ----------------------------------------------------
