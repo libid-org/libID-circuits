@@ -29,7 +29,7 @@ SEED = b"libid oidc-google fixture key v2"
 SUB = "100000000000000000001"
 EMAIL = "Fixture@Example.com"
 AUD = "000000000000-libidfixture.apps.googleusercontent.com"
-DIGEST = bytes.fromhex("b318fb559e16a179b853ed2853576cda16032d93b0839bb81a55135d334c0af5")
+DIGEST = bytes.fromhex("6beb766c7835d641b3800e8e4c03616d386251c86dcb8b640e59cec9ba42a01f")
 IAT = 1893452400
 EXP = 1893456000
 
