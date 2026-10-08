@@ -121,6 +121,20 @@ pub fn halves(digest: [u8; 32]) -> [Field; 2] {
     [high, low]
 }
 
+/// A node as the public inputs carry it: `halves(SHA256(tag || value[0..len]))`.
+///
+/// `value` is a checked id (`check_id`) or a folded handle (what
+/// `normalize_handle` returns); the checks zero its tail, so a padded buffer
+/// has one node. The caller runs the check where its constraint order puts
+/// it.
+pub fn node_halves<let TAG: u32, let MAX: u32>(
+    tag: [u8; TAG],
+    value: [u8; MAX],
+    len: u32,
+) -> [Field; 2] {
+    halves(tagged_hash::<TAG, MAX, TAG + MAX>(tag, value, len))
+}
+
 /// A-Z down to a-z; every other byte unchanged.
 pub fn fold(b: u8) -> u8 {
     if (b >= 0x41) & (b <= 0x5a) {
@@ -287,20 +301,6 @@ pub fn identity_link<let ID_TAG: u32, let HANDLE_TAG: u32, let MAX_ID: u32, let 
     );
 
     // 4. The keys.
-    assert(
-        halves(
-            tagged_hash::<ID_TAG, MAX_ID, ID_TAG + MAX_ID>(id_tag, id, id_len),
-        )
-            == id_node,
-        "id node mismatch",
-    );
-    assert(
-        halves(tagged_hash::<HANDLE_TAG, MAX_HANDLE, HANDLE_TAG + MAX_HANDLE>(
-            handle_tag,
-            folded,
-            handle_len,
-        ))
-            == handle_node,
-        "handle node mismatch",
-    );
+    assert(node_halves(id_tag, id, id_len) == id_node, "id node mismatch");
+    assert(node_halves(handle_tag, folded, handle_len) == handle_node, "handle node mismatch");
 }

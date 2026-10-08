@@ -3,12 +3,12 @@ use bignum::RuntimeBigNum;
 use libid_identity::{
     check_id,
     halves,
+    node_halves,
     normalize_handle,
     table::{
         HANDLE_RULES_GOOGLE, HANDLE_TAG_GOOGLE, ID_RULES_GOOGLE, MAX_HANDLE_GOOGLE, MAX_ID_GOOGLE,
         USER_ID_TAG_GOOGLE,
     },
-    tagged_hash,
 };
 use noir_base64::BASE64_URL_ENCODER;
 use noir_rsa::rsa::verify_sha256_pkcs1v15;
@@ -22,8 +22,6 @@ global EMAIL_MAX: u32 = MAX_HANDLE_GOOGLE;
 global DIGEST_LEN: u32 = 32; // Authorization Digest, common REQ-COMMON-01
 global NONCE_B64_LEN: u32 = 43; // BASE64URL_NOPAD(32 bytes)
 global SUB_MAX: u32 = MAX_ID_GOOGLE; // Google `sub` is ~21 digits; tag + 31 bytes fit one SHA-256 block
-global USER_ID_TAG_LEN: u32 = USER_ID_TAG_GOOGLE.len();
-global HANDLE_TAG_LEN: u32 = HANDLE_TAG_GOOGLE.len();
 global AUDIENCE_MAX: u32 = 128;
 global NUM_LIMBS: u32 = 18;
 global MOD_BITS: u32 = 2048;
@@ -53,26 +51,6 @@ fn b64_encoded_len(input_len: u32) -> u32 {
     let tail = input_len - chunks_full * 3;
     let extra = if tail == 0 { 0 } else { tail + 1 };
     chunks_full * 4 + extra
-}
-
-// The Google id node: SHA-256 of the ASCII tag `libid.google.user-id`
-// followed by the signed `sub`. The node is public and the `sub` is not.
-fn user_id_digest(sub_bytes: [u8; SUB_MAX], sub_len: u32) -> [u8; 32] {
-    tagged_hash::<USER_ID_TAG_LEN, SUB_MAX, USER_ID_TAG_LEN + SUB_MAX>(
-        USER_ID_TAG_GOOGLE,
-        sub_bytes,
-        sub_len,
-    )
-}
-
-// The Google handle node: SHA-256 of `libid.google.handle` followed by the
-// folded address.
-fn handle_digest(folded: [u8; EMAIL_MAX], email_len: u32) -> [u8; 32] {
-    tagged_hash::<HANDLE_TAG_LEN, EMAIL_MAX, HANDLE_TAG_LEN + EMAIL_MAX>(
-        HANDLE_TAG_GOOGLE,
-        folded,
-        email_len,
-    )
 }
 
 // REQ-COMMON-19 / REQ-COMMON-19D: every claim match must end at a JSON
@@ -217,7 +195,7 @@ fn main(
     check_id(sub_bytes, sub_len, ID_RULES_GOOGLE);
     assert(payload_json[sub_offset + SUB_PREFIX_LEN + sub_len] == 34); // closing `"`
     assert_structural(payload_json[sub_offset + SUB_PREFIX_LEN + sub_len + 1]);
-    assert(halves(user_id_digest(sub_bytes, sub_len)) == id_node, "id node mismatch");
+    assert(node_halves(USER_ID_TAG_GOOGLE, sub_bytes, sub_len) == id_node, "id node mismatch");
 
     // 6. `email_verified`:true must be present in the payload.
     //    Pattern bytes: `"email_verified":true`
@@ -312,7 +290,10 @@ fn main(
     assert(aud_offset >= 1);
 
     // 9b. The handle node.
-    assert(halves(handle_digest(folded, email_len)) == handle_node, "handle node mismatch");
+    assert(
+        node_halves(HANDLE_TAG_GOOGLE, folded, email_len) == handle_node,
+        "handle node mismatch",
+    );
 
     // 10. Type bounds.
     assert(signing_input_len <= SIGNING_INPUT_MAX);
@@ -404,51 +385,28 @@ fn nonce_encoding_matches_external_vectors() {
     }
 }
 
-// The vectors below are Python `hashlib.sha256` of the tag and the `sub`, so
-// they check the circuit against an oracle outside the Noir ecosystem.
+// The vectors below are Python `hashlib.sha256` of the tag and the `sub`, as
+// halves, so they check the circuit's id node against an oracle outside the
+// Noir ecosystem.
 #[test]
-fn user_id_digest_matches_an_independent_vector() {
+fn the_id_node_matches_an_independent_vector() {
     // hashlib.sha256(b"libid.google.user-id" + b"123456789012345678901")
-    let expected: [u8; 32] = [
-        0xa8, 0x3e, 0x66, 0xb3, 0x44, 0x68, 0x31, 0x5f, 0xb6, 0x8c, 0x30, 0x98, 0xb3, 0xc5, 0x21,
-        0xb7, 0x49, 0xaa, 0xfb, 0x1d, 0xb3, 0x39, 0x0c, 0xb5, 0x3e, 0xc0, 0x3a, 0x8d, 0xb1, 0x39,
-        0xf2, 0xc7,
-    ];
-    let got = user_id_digest(padded("123456789012345678901".as_bytes()), 21);
-    for i in 0..32 {
-        assert(got[i] == expected[i], "id node disagrees with the hashlib vector");
-    }
-    let parts = halves(got);
-    assert(parts[0] == 0xa83e66b34468315fb68c3098b3c521b7);
-    assert(parts[1] == 0x49aafb1db3390cb53ec03a8db139f2c7);
+    let sub: [u8; SUB_MAX] = padded("123456789012345678901".as_bytes());
+    let got = node_halves(USER_ID_TAG_GOOGLE, sub, 21);
+    assert(got == [0xa83e66b34468315fb68c3098b3c521b7, 0x49aafb1db3390cb53ec03a8db139f2c7]);
 }
 
 #[test]
-fn user_id_digest_covers_the_shortest_and_longest_sub() {
+fn the_id_node_covers_the_shortest_and_longest_sub() {
     // One byte, and all 31: the tag plus the longest `sub` still fits the
     // single block the length comment on SUB_MAX promises.
-    let one: [u8; 32] = [
-        0xc7, 0x52, 0xbf, 0xa2, 0x2a, 0xbd, 0x3d, 0x9f, 0xe9, 0x57, 0x04, 0xee, 0x7a, 0x13, 0x6e,
-        0x33, 0xf4, 0x7e, 0x48, 0x60, 0x52, 0x33, 0xe3, 0xb6, 0xc1, 0xe9, 0xe6, 0x5e, 0xa6, 0x0e,
-        0xaf, 0x99,
-    ];
-    let got = user_id_digest(padded("1".as_bytes()), 1);
-    for i in 0..32 {
-        assert(got[i] == one[i], "one-byte sub digest disagrees");
-    }
+    let sub: [u8; SUB_MAX] = padded("1".as_bytes());
+    let got = node_halves(USER_ID_TAG_GOOGLE, sub, 1);
+    assert(got == [0xc752bfa22abd3d9fe95704ee7a136e33, 0xf47e48605233e3b6c1e9e65ea60eaf99]);
     // "!" followed by thirty "~": the lowest and highest printable bytes.
-    let full: [u8; 32] = [
-        0x8f, 0x65, 0x6d, 0x80, 0x0b, 0xef, 0x67, 0xcb, 0xaa, 0x34, 0x85, 0x2b, 0xb1, 0x62, 0x02,
-        0xc6, 0x41, 0x89, 0xa0, 0xab, 0x5a, 0xe9, 0x4d, 0x9e, 0xcc, 0x9d, 0x82, 0xc8, 0x30, 0x98,
-        0x9d, 0xcf,
-    ];
-    let got = user_id_digest(
-        padded("!~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~".as_bytes()),
-        SUB_MAX,
-    );
-    for i in 0..32 {
-        assert(got[i] == full[i], "31-byte sub digest disagrees");
-    }
+    let sub: [u8; SUB_MAX] = padded("!~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~".as_bytes());
+    let got = node_halves(USER_ID_TAG_GOOGLE, sub, SUB_MAX);
+    assert(got == [0x8f656d800bef67cbaa34852bb16202c6, 0x4189a0ab5ae94d9ecc9d82c830989dcf]);
 }
 
 // The `sub`'s byte rules are lib/identity's `check_id` under
