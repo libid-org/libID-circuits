@@ -21,12 +21,30 @@ support, which fits libID's client-side proving use case almost perfectly.
 | Circuit | Package | Proves |
 |---|---|---|
 | `circuits/bearer-link` | `bearer_link` | One hidden OAuth bearer opens both of a ceremony's blinded commitments — the token session's and the identity session's. Exactly two public inputs and nothing else: the credential never leaves the circuit, and the two sessions are tied together without publishing anything that identifies them. Serves X and GitHub, whose statements are byte-identical. |
+| `circuits/bearer-link-x` | `bearer_link_x` | X's bearer link plus the account as keys. The identity response reveals only the anchors around `id` and `username`; the circuit opens the two committed values as X sent them, checks them against X's rules, folds the handle, and outputs `idNode = SHA256("libid.x.user-id" \|\| id)` and `handleNode = SHA256("libid.x.handle" \|\| fold(handle))`. 72 public inputs: the two bearer commitments (64 bytes), then the id and handle commitments and the two nodes as 16-byte halves. Neither value reaches the chain. |
 | `circuits/oidc-google` | `oidc_google` | Possession of a Google OIDC JWT: verifies the RSASSA-PKCS1-v1_5 signature over `header.payload` and exposes the Authorization Digest carried in `nonce`, `SHA256(aud)`, the canonical `userId` `SHA256("libid.google-user-id" \|\| sub)` (the `sub` itself stays private), the raw `email` bytes, `exp`, and the modulus that verified. The Platform Verifier alone decides whether that modulus is trusted. |
 
 Sources were extracted byte-verbatim from the original monorepo and then
 formatted once with `nargo fmt` (verified to leave the vk byte-identical;
 only debug metadata in the ACIR json moves); CI enforces `nargo fmt --check`
 from there on.
+
+`lib/identity` is the library the identity circuits share: commitment
+openings, the tagged node hash, and the handle and id rules. Its constants and
+its test table, `src/table.nr`, are generated from libid-contracts'
+`solidity/contracts/identity/handles.json`, the table Solidity, Rust and
+TypeScript run too:
+
+```sh
+# from a libid-contracts checkout, with nargo on PATH
+scripts/regen-identity-handles.py --noir-out ../libid-circuits/lib/identity/src/table.nr
+```
+
+`scripts/build.sh` writes that table's SHA-256 to `handles.json.sha256` beside
+the artifacts, so a consumer can tell a verifier built from another table.
+
+`scripts/identity-link-witness.py` writes a `bearer-link-x` `Prover.toml` from
+the identity-link witness libid-rs emits with a ceremony record.
 
 ## Toolchain
 

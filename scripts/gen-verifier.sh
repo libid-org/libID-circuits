@@ -53,6 +53,7 @@ source "$ROOT/toolchain.env"
 # listed here is a breaking change for every consumer and must be deliberate.
 KNOWN_VERIFIERS=(
   bearer-link=BearerLinkHonkVerifier
+  bearer-link-x=BearerLinkXHonkVerifier
   oidc-google=OidcGoogleHonkVerifier
 )
 

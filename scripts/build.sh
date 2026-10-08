@@ -108,4 +108,11 @@ for dir in "$ROOT"/circuits/*/; do
   "$ROOT/scripts/gen-verifier.sh" "$circuit" --artifacts "$OUT"
 done
 
+# The handles.json the identity circuits' rules and tags were generated from.
+# A consumer compares it with its own copy: a verifier for a circuit built from
+# another table keys handles another way.
+sed -n 's/^pub global TABLE_SHA256: str<64> = "\([0-9a-f]\{64\}\)";$/\1/p' \
+  "$ROOT/lib/identity/src/table.nr" > "$OUT/handles.json.sha256"
+[[ -s "$OUT/handles.json.sha256" ]] || { echo "error: no TABLE_SHA256 in lib/identity/src/table.nr" >&2; exit 1; }
+
 echo "OK: artifacts written to $OUT"

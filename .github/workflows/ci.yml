@@ -101,7 +101,7 @@ jobs:
       - name: nargo fmt
         run: |
           set -euo pipefail
-          for dir in circuits/*/; do
+          for dir in lib/*/ circuits/*/; do
             echo "==> $dir"
             (cd "$dir" && nargo fmt --check)
           done
@@ -109,11 +109,12 @@ jobs:
       - name: shellcheck
         run: shellcheck scripts/*.sh
 
-      # Every circuit carries its own #[test] fns in src/main.nr.
+      # Every circuit carries its own #[test] fns in src/main.nr, and
+      # lib/identity runs the handles.json vector table (src/table.nr).
       - name: nargo test
         run: |
           set -euo pipefail
-          for dir in circuits/*/; do
+          for dir in lib/*/ circuits/*/; do
             echo "==> $dir"
             (cd "$dir" && nargo test)
           done
