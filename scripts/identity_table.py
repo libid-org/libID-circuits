@@ -1,9 +1,10 @@
-"""The identity circuits' constants, read from the Noir sources that define them.
+"""The circuits' constants, read from the Noir sources that define them.
 
-`lib/identity/src/table.nr` is generated from libid-contracts'
+`lib/identity/src/table.nr` is generated from libID-contracts'
 `solidity/contracts/handles/handles.json`: the platform tags and the buffer
-sizes. `lib/identity/src/lib.nr` holds the bearer cap. The witness scripts
-read both here so no size or tag is written down twice.
+sizes. `lib/identity/src/lib.nr` holds the bearer cap, and
+`circuits/oidc-google/src/main.nr` the JWT buffers and the RSA limb layout.
+The witness scripts read them here so no size or tag is written down twice.
 """
 from __future__ import annotations
 
@@ -13,14 +14,15 @@ import re
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 TABLE = ROOT / "lib" / "identity" / "src" / "table.nr"
 LIB = ROOT / "lib" / "identity" / "src" / "lib.nr"
+OIDC_GOOGLE = ROOT / "circuits" / "oidc-google" / "src" / "main.nr"
 
 
 def constant(name: str, source: pathlib.Path = TABLE) -> str:
-    """The right-hand side of `pub global <name>`, whitespace collapsed."""
+    """The right-hand side of `[pub] global <name>`, whitespace collapsed."""
     # nargo fmt wraps long constants, so read the declaration whole.
-    found = re.search(rf"pub global {name}:[^=]*=\s*([^;]*);", source.read_text())
+    found = re.search(rf"\bglobal\s+{name}\s*:[^=]*=\s*([^;]*);", source.read_text())
     if found is None:
-        raise SystemExit(f"{source}: no `pub global {name}`; regenerate or check the name")
+        raise SystemExit(f"{source}: no `global {name}`; regenerate or check the name")
     return " ".join(found.group(1).split())
 
 

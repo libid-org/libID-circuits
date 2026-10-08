@@ -40,19 +40,20 @@ DIGEST = bytes.fromhex("6beb766c7835d641b3800e8e4c03616d386251c86dcb8b640e59cec9
 IAT = 1893452400
 EXP = 1893456000
 
-# circuits/oidc-google/src/main.nr's buffers.
-SIGNING_INPUT_MAX = 1280
-PAYLOAD_JSON_MAX = 768
-AUDIENCE_MAX = 128
+# circuits/oidc-google/src/main.nr's buffers and RSA modulus layout.
+SIGNING_INPUT_MAX = identity_table.integer("SIGNING_INPUT_MAX", identity_table.OIDC_GOOGLE)
+PAYLOAD_JSON_MAX = identity_table.integer("PAYLOAD_JSON_MAX", identity_table.OIDC_GOOGLE)
+AUDIENCE_MAX = identity_table.integer("AUDIENCE_MAX", identity_table.OIDC_GOOGLE)
+NUM_LIMBS = identity_table.integer("NUM_LIMBS", identity_table.OIDC_GOOGLE)
+MOD_BITS = identity_table.integer("MOD_BITS", identity_table.OIDC_GOOGLE)
 # The address and `sub` buffers and the tags are lib/identity's generated
 # Google constants.
 EMAIL_MAX = identity_table.integer("MAX_HANDLE_GOOGLE")
 SUB_MAX = identity_table.integer("MAX_ID_GOOGLE")
 USER_ID_TAG = identity_table.byte_array("USER_ID_TAG_GOOGLE")
 HANDLE_TAG = identity_table.byte_array("HANDLE_TAG_GOOGLE")
+# noir-bignum's limb width; main.nr takes it from the library, not as a global.
 LIMB_BITS = 120
-NUM_LIMBS = 18
-MOD_BITS = 2048
 
 
 class Stream:
