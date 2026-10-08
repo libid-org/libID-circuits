@@ -120,13 +120,39 @@ jobs:
             (cd "$dir" && nargo test)
           done
 
-      # The committed oidc-google witness is this script's output. Its key is
-      # seeded, so a regeneration is byte-identical; a drift fails here.
-      - name: oidc-google witness is reproducible
+      # Every committed witness is a script's output: oidc-google's from a
+      # seeded key, the bearer-link ones from the synthetic fixtures in
+      # fixtures/. A regeneration is byte-identical; a drift fails here.
+      - name: Witnesses are reproducible
         run: |
           set -euo pipefail
           python3 scripts/google-fixture-witness.py --out "$RUNNER_TEMP/oidc-google.Prover.toml"
           diff -u circuits/oidc-google/Prover.toml "$RUNNER_TEMP/oidc-google.Prover.toml"
+          for platform in x github; do
+            python3 scripts/identity-link-witness.py "fixtures/$platform-identity-link-witness.json" \
+              --out "$RUNNER_TEMP/bearer-link-$platform.Prover.toml"
+            diff -u "circuits/bearer-link-$platform/Prover.toml" "$RUNNER_TEMP/bearer-link-$platform.Prover.toml"
+          done
+
+      # A bare witness is a live capture whatever its name: the script must
+      # refuse stdout and an unignored path in the work tree, and write a
+      # path outside it with mode 0600 and nothing on stdout.
+      - name: Secret witness guard
+        run: |
+          set -euo pipefail
+          bare="$RUNNER_TEMP/capture.json"
+          jq .identity_link_witness fixtures/x-identity-link-witness.json > "$bare"
+          if python3 scripts/identity-link-witness.py "$bare" > "$RUNNER_TEMP/stdout"; then
+            echo "::error::a bare witness was written to stdout"; exit 1
+          fi
+          [ ! -s "$RUNNER_TEMP/stdout" ]
+          if python3 scripts/identity-link-witness.py "$bare" --out leak.toml; then
+            echo "::error::a bare witness was written into the work tree"; exit 1
+          fi
+          [ ! -e leak.toml ]
+          python3 scripts/identity-link-witness.py "$bare" --out "$RUNNER_TEMP/secret.toml" > "$RUNNER_TEMP/stdout"
+          [ ! -s "$RUNNER_TEMP/stdout" ]
+          [ "$(stat -c %a "$RUNNER_TEMP/secret.toml")" = 600 ]
 
       # Full build: proves every circuit compiles, every vk generates, and
       # every Solidity verifier generates under its pinned contract name with

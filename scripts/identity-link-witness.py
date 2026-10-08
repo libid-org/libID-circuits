@@ -1,12 +1,23 @@
 #!/usr/bin/env python3
 """Write a bearer-link-<platform> Prover.toml from an identity-link witness.
 
-The witness is what libid-rs writes beside a ceremony record: the synthetic
-`identity_link_witness` member of `<platform>-ceremony-session.json`
-(`cargo run -p libid-tlsn --example ceremony_fixtures`), or the owner-only
-`<platform>-identity-link-witness.secret.json` a real capture writes
-(`--example capture_ceremony`). Either way: the bearer, the id and the handle
-as the platform sent them, each with the blinder of its commitment.
+The witness is what libid-rs writes beside a ceremony record: the bearer, the
+id and the handle as the platform sent them, each with the blinder of its
+commitment. It comes in two forms, told apart by content, never by file name:
+
+- a session file whose `identity_link_witness` member holds the witness:
+  libid-rs' synthetic ceremony fixtures (`cargo run -p libid-tlsn --example
+  ceremony_fixtures`) and this repo's fixtures/*-identity-link-witness.json
+  copies of them. Synthetic: the Prover.toml may go to stdout or any path.
+- a bare witness, `platform`, `token_bearer`, ... at the top level: what a
+  real capture writes (`--example capture_ceremony`). It holds a live bearer,
+  and its blinders open the id and handle commitments the notary signed, so
+  whoever holds them can link that record to the account for as long as the
+  record exists, after the bearer is revoked too. It is secret whatever its
+  name, and so is the Prover.toml written from it: --out is required, must end
+  in `.toml`, must lie outside every git work tree or be ignored by the one
+  it is in, and is written with mode 0600; nothing goes to stdout. The script
+  prints, on stderr, how to prove it without leaving a copy in the repo.
 
 The public inputs are computed here, with hashlib, from the raw values: each
 commitment is SHA256(value || blinder) and must equal the one the witness
@@ -14,12 +25,8 @@ states (which libid-rs checked against the signed record); the nodes are
 SHA256(tag || id) and SHA256(tag || folded handle). The circuit computes the
 same things its own way; a disagreement fails `nargo execute`.
 
-A `*.secret.json` witness holds a live bearer, and so does the Prover.toml
-written from it. For one, --out is required, must not be a file git tracks,
-and is written with mode 0600; nothing goes to stdout.
-
 Usage:
-  scripts/identity-link-witness.py <witness.json | session fixture> [--out Prover.toml]
+  scripts/identity-link-witness.py <session fixture | witness.json> [--out Prover.toml]
 """
 from __future__ import annotations
 
@@ -62,31 +69,67 @@ def toml_array(values) -> str:
     return "[" + ", ".join(f'"{v}"' for v in values) + "]"
 
 
-def tracked_by_git(path: pathlib.Path) -> bool:
-    """Whether git tracks `path`. Outside a work tree nothing is tracked."""
-    path = path.resolve()
+def git(directory: pathlib.Path, *args: str) -> subprocess.CompletedProcess:
     try:
-        result = subprocess.run(
-            ["git", "-C", str(path.parent), "ls-files", "--error-unmatch", "--", path.name],
-            stdout=subprocess.DEVNULL,
+        return subprocess.run(
+            ["git", "-C", str(directory), *args],
+            stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
+            text=True,
         )
     except FileNotFoundError:
-        raise SystemExit("git is required to check that --out is not a tracked file; install git") from None
-    return result.returncode == 0
+        raise SystemExit("git is required to check where a secret witness's --out lies; install git") from None
 
 
 def refuse_secret_destination(out: pathlib.Path | None) -> None:
+    """Refuse every --out a secret Prover.toml could leak from.
+
+    Inside a git work tree only a path its ignore rules match is accepted; a
+    tracked path never matches them, so it is refused too.
+    """
     if out is None:
         raise SystemExit(
-            "the witness is a *.secret.json capture and holds a live bearer: "
-            "pass --out <file outside the repo>; it is never written to stdout"
+            "the witness is a bare capture and holds a live bearer: "
+            "pass --out <file>.toml outside the repo; it is never written to stdout"
         )
-    if tracked_by_git(out):
-        raise SystemExit(
-            f"{out} is tracked by git and the witness holds a live bearer: "
-            "pass --out <file outside the repo>, e.g. under $XDG_RUNTIME_DIR"
-        )
+    if out.suffix != ".toml":
+        raise SystemExit(f"{out}: nargo reads only <name>.toml; pass --out a path ending in .toml")
+    parent = out.resolve().parent
+    if not parent.is_dir():
+        raise SystemExit(f"{parent} is not a directory; create it or pass --out into an existing one")
+    inside = git(parent, "rev-parse", "--is-inside-work-tree")
+    if inside.returncode != 0 or inside.stdout.strip() != "true":
+        return
+    if git(parent, "check-ignore", "-q", "--", out.name).returncode == 0:
+        return
+    top = git(parent, "rev-parse", "--show-toplevel").stdout.strip()
+    raise SystemExit(
+        f"{out} is in the git work tree {top} and not ignored by it, and the witness holds a live bearer: "
+        "pass --out a path outside any git work tree, e.g. under $XDG_RUNTIME_DIR"
+    )
+
+
+def proving_instructions(out: pathlib.Path, platform: str) -> str:
+    stem = out.resolve().with_suffix("")
+    circuit = identity_table.ROOT / "circuits" / f"bearer-link-{platform.lower()}"
+    return (
+        f"wrote {out} (mode 0600). It holds a live bearer and the blinders that link the\n"
+        "signed record to the account. Prove it without leaving a copy in the repo:\n"
+        "  umask 077\n"
+        f"  (cd {circuit} && nargo execute -p {stem} {stem})\n"
+        f"nargo reads {stem}.toml and writes the solved witness to {stem}.gz.\n"
+        f"Without the last argument it writes {circuit}/target/<package>.gz instead,\n"
+        "keeping the mode of any earlier file there: delete that file after proving.\n"
+        f"Delete {stem}.toml and {stem}.gz once the proof is made.\n"
+    )
+
+
+def source_label(path: pathlib.Path) -> str:
+    """The witness path as the header names it: repo-relative, else its name."""
+    try:
+        return str(path.resolve().relative_to(identity_table.ROOT))
+    except ValueError:
+        return path.name
 
 
 def write_owner_only(out: pathlib.Path, text: str) -> None:
@@ -110,14 +153,21 @@ def main() -> int:
     parser.add_argument("--out", type=pathlib.Path)
     args = parser.parse_args()
 
-    # A capture's witness holds the live bearer; so does the Prover.toml
-    # written from it. Refuse every path that would leak it before reading.
-    secret = args.witness.name.endswith(".secret.json")
+    doc = json.loads(args.witness.read_text())
+    if "identity_link_witness" in doc:
+        witness, secret = doc["identity_link_witness"], False
+    elif "token_bearer" in doc:
+        witness, secret = doc, True
+    else:
+        raise SystemExit(
+            f"{args.witness}: neither a session file with an `identity_link_witness` member "
+            "nor a bare witness with `token_bearer`"
+        )
+    # A bare witness holds the live bearer; so does the Prover.toml written
+    # from it. Refuse every path that would leak it before writing anything.
     if secret:
         refuse_secret_destination(args.out)
 
-    doc = json.loads(args.witness.read_text())
-    witness = doc.get("identity_link_witness", doc)
     platform = witness["platform"].upper()
 
     bearer, blinder_token = opened(witness, "token_bearer")
@@ -140,7 +190,17 @@ def main() -> int:
     def commitment(entry) -> bytes:
         return bytes.fromhex(entry["commitment"].removeprefix("0x"))
 
-    lines = [
+    if secret:
+        header = [
+            f"# Written by scripts/identity-link-witness.py from {args.witness.name}.",
+            "# It holds a live bearer: delete it once the proof is made.",
+        ]
+    else:
+        header = [
+            f"# Written by scripts/identity-link-witness.py from {source_label(args.witness)}:",
+            f"# a synthetic {witness['platform']} ceremony witness. scripts/check-verifiers.sh proves it.",
+        ]
+    lines = header + [
         f"bearer = {toml_array(padded('token_bearer', bearer, max_bearer))}",
         f'bearer_len = "{len(bearer)}"',
         f"blinder_token = {toml_array(blinder_token)}",
@@ -163,6 +223,7 @@ def main() -> int:
         sys.stdout.write(text)
     elif secret:
         write_owner_only(args.out, text)
+        sys.stderr.write(proving_instructions(args.out, platform))
     else:
         args.out.write_text(text)
     return 0

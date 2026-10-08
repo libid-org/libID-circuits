@@ -1,0 +1,26 @@
+{
+  "provenance": "Synthetic. The identity_link_witness member of libID-contracts' solidity/contracts/ceremony/test/fixtures/x-ceremony-session.json, which libid-rs writes with `cargo run -p libid-tlsn --example ceremony_fixtures`. No real account or bearer.",
+  "identity_link_witness": {
+    "handle": {
+      "blinder": "0xd639594244d85a46d0002ffb6262fd92",
+      "commitment": "0xfcee907646bad32e09cae7199792c9870ad693319eba3a1edec900d69219372d",
+      "value": "Alice_1"
+    },
+    "id": {
+      "blinder": "0xb2d7f429229b4e5dc944859620148954",
+      "commitment": "0x20b35d3ac8aa56352db0a07bd3ed54ef4203a487239945fd076c1c118299d188",
+      "value": "2244994945"
+    },
+    "identity_bearer": {
+      "blinder": "0xcf072daf48b6cc42ffd7c4bfe491249c",
+      "commitment": "0x5be56986e68f1b897eb1c8afbbfa9456616288fd3e2d4dfa93cab04e408c23cd",
+      "value": "VGhpcyBpcyBub3QgYSByZWFsIGJlYXJlcg"
+    },
+    "platform": "x",
+    "token_bearer": {
+      "blinder": "0x450dd509cdc99600441854638a1fc449",
+      "commitment": "0xd6c2b57cb9ea67472af16d3f11f3eb3fc484acaf0bf5ee908e5c2b89e05c2ac6",
+      "value": "VGhpcyBpcyBub3QgYSByZWFsIGJlYXJlcg"
+    }
+  }
+}

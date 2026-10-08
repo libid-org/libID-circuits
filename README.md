@@ -48,11 +48,46 @@ another table.
 
 `scripts/identity-link-witness.py` writes a `bearer-link-x` or
 `bearer-link-github` `Prover.toml` from the identity-link witness libid-rs
-emits with a ceremony record. The committed ones are libid-rs' synthetic X
-and GitHub fixtures, whose handles (`Alice_1`, `OctoCat`) exercise the fold.
-A real capture's `*.secret.json` witness holds a live bearer: the script
-writes its `Prover.toml` only to an `--out` path git does not track, with
-mode 0600, and never to stdout.
+emits with a ceremony record. The committed ones are written from
+`fixtures/x-identity-link-witness.json` and
+`fixtures/github-identity-link-witness.json`: the `identity_link_witness`
+members of libID-contracts' synthetic
+`solidity/contracts/ceremony/test/fixtures/{x,github}-ceremony-session.json`
+(libid-rs' `cargo run -p libid-tlsn --example ceremony_fixtures`), whose
+handles (`Alice_1`, `OctoCat`) exercise the fold. CI regenerates both and
+fails on a difference.
+
+### Proving a real capture
+
+The script tells the two forms apart by content, not by file name. A session
+file, with the witness in its `identity_link_witness` member, is synthetic. A
+bare witness, with `platform` and `token_bearer` at the top level, is what a
+real capture writes, and is secret:
+
+- it holds a live bearer until the platform revokes it;
+- its id and handle blinders open the commitments the notary signed, so
+  whoever holds them can link that signed record to the account for as long
+  as the record exists. Revoking the bearer does not undo that.
+
+For a bare witness the script writes only to an `--out` path ending in
+`.toml` that lies outside every git work tree, or that the work tree's ignore
+rules match, with mode 0600, and never to stdout. It then prints how to prove
+it. Prove from outside the repo, naming both the input and the solved
+witness by absolute path, so nothing lands in `target/`:
+
+```sh
+umask 077
+dir="${XDG_RUNTIME_DIR:?}/libid"; mkdir -p "$dir"
+scripts/identity-link-witness.py ~/capture/x-identity-link-witness.secret.json --out "$dir/x.toml"
+(cd circuits/bearer-link-x && nargo execute -p "$dir/x" "$dir/x")   # reads x.toml, writes x.gz
+# ... prove from "$dir/x.gz" ...
+rm -f "$dir/x.toml" "$dir/x.gz"
+```
+
+`nargo execute` appends `.toml` to the `-p` name and `.gz` to the witness
+name. Without the witness name it writes `circuits/<circuit>/target/<package>.gz`;
+an existing file there keeps its mode (group-readable by default), so delete
+`target/*.gz` after proving.
 
 ## Toolchain
 
