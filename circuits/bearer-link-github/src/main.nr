@@ -24,8 +24,9 @@
 //   66-67  handle_commitment    halves
 //   68-69  id_node              halves
 //   70-71  handle_node          halves
-// The Platform Verifier writes 0-67 from the signed records and 68-71 from
-// the claim it returns; nothing here is read from a payload.
+// The Platform Verifier writes 0-67 from the records the notary signed, never
+// from the payload. 68-71 are the nodes the payload claims and the claim
+// returns; this proof is what binds them to the committed values.
 
 use libid_identity::{
     BLINDER_LEN,
