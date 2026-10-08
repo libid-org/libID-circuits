@@ -9,7 +9,6 @@ use libid_identity::{
         USER_ID_TAG_GOOGLE,
     },
     tagged_hash,
-    testing::padded,
 };
 use noir_base64::BASE64_URL_ENCODER;
 use noir_rsa::rsa::verify_sha256_pkcs1v15;
@@ -323,6 +322,8 @@ fn main(
 }
 
 // --- Tests ----------------------------------------------------------------
+
+use libid_identity_testing::padded;
 
 #[test]
 fn nonce_encoding_matches_the_published_vector() {

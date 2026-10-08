@@ -3,7 +3,7 @@
 // written out in the comment), not from this library.
 
 use crate::{BLINDER_LEN, check_id, constrain_bearer, hash_commit, MAX_BEARER_LEN, table};
-use crate::testing::padded;
+use libid_identity_testing::{blinder, padded};
 
 // --- constrain_bearer -------------------------------------------------------
 
@@ -75,14 +75,6 @@ fn the_shortest_and_longest_bearers_are_accepted() {
 
 // --- hash_commit ------------------------------------------------------------
 
-fn counting_blinder() -> [u8; BLINDER_LEN] {
-    let mut b: [u8; BLINDER_LEN] = [0; BLINDER_LEN];
-    for i in 0..BLINDER_LEN {
-        b[i] = i as u8;
-    }
-    b
-}
-
 #[test]
 fn hash_commit_matches_an_independent_vector() {
     // python3 -c "import hashlib; print(hashlib.sha256(b'abcd' + b'\x42'*16).hexdigest())"
@@ -107,7 +99,7 @@ fn hash_commit_covers_the_shortest_and_longest_bearer() {
         0xf9, 0x48,
     ];
     assert(
-        hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(shortest, 1, counting_blinder())
+        hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(shortest, 1, blinder(0))
             == expected_shortest,
     );
 
@@ -122,7 +114,7 @@ fn hash_commit_covers_the_shortest_and_longest_bearer() {
         hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(
             longest,
             MAX_BEARER_LEN,
-            counting_blinder(),
+            blinder(0),
         )
             == expected_longest,
     );
@@ -137,7 +129,7 @@ fn independent_blinders_give_different_commitments() {
     let a = hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(
         bearer,
         MAX_BEARER_LEN,
-        counting_blinder(),
+        blinder(0),
     );
     let b =
         hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(bearer, MAX_BEARER_LEN, other);

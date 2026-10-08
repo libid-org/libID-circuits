@@ -6,3 +6,4 @@ compiler_version = ">=1.0.0"
 
 [dependencies]
 libid_identity = { path = "../../lib/identity" }
+libid_identity_testing = { path = "../../lib/identity-testing" }

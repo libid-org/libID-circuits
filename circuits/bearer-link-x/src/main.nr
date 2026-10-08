@@ -35,7 +35,6 @@ use libid_identity::{
     identity_link,
     MAX_BEARER_LEN,
     table::{HANDLE_RULES_X, HANDLE_TAG_X, ID_RULES_X, MAX_HANDLE_X, MAX_ID_X, USER_ID_TAG_X},
-    testing::{blinder, padded},
 };
 
 fn main(
@@ -83,6 +82,8 @@ fn main(
 }
 
 // --- Tests ----------------------------------------------------------------
+
+use libid_identity_testing::{blinder, padded};
 //
 // Every expected value comes from an independent Python computation (hashlib
 // over the bytes written out below), not from this circuit:

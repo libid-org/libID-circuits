@@ -13,7 +13,6 @@
 // generated tests run it against the same table those languages run.
 
 pub mod table;
-pub mod testing;
 mod tests;
 
 use sha256::sha256_var;

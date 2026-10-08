@@ -36,7 +36,6 @@ use libid_identity::{
         HANDLE_RULES_GITHUB, HANDLE_TAG_GITHUB, ID_RULES_GITHUB, MAX_HANDLE_GITHUB, MAX_ID_GITHUB,
         USER_ID_TAG_GITHUB,
     },
-    testing::{blinder, padded},
 };
 
 fn main(
@@ -84,6 +83,8 @@ fn main(
 }
 
 // --- Tests ----------------------------------------------------------------
+
+use libid_identity_testing::{blinder, padded};
 //
 // Every expected value comes from an independent Python computation (hashlib
 // over the bytes written out below), not from this circuit:
