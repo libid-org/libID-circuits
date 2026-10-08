@@ -156,6 +156,13 @@ jobs:
           if python3 "$script" "$bare" --out leak.toml; then
             echo "::error::a bare witness was written into the work tree"; exit 1
           fi
+          # Dubious ownership, with no safe.directory exception from any
+          # config: git must refuse the repository, and so must the script.
+          export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null
+          probe="$(GIT_TEST_ASSUME_DIFFERENT_OWNER=1 git rev-parse --is-inside-work-tree 2>&1 || true)"
+          if [[ "$probe" != *"dubious ownership"* ]]; then
+            echo "::error::git did not report dubious ownership; the case below would not be exercised"; exit 1
+          fi
           if GIT_TEST_ASSUME_DIFFERENT_OWNER=1 python3 "$script" "$bare" --out leak.toml; then
             echo "::error::a bare witness was written into a work tree git refused to read"; exit 1
           fi
