@@ -96,10 +96,6 @@ jobs:
           nargo --version | grep -qF "nargo version = ${NARGO_VERSION}"
           [ "$(bb --version | tail -1)" = "${BB_VERSION}" ]
 
-      # The sources were formatted once after the verbatim extraction from
-      # the original monorepo (verified: formatting leaves the vk
-      # byte-identical; only debug metadata in the ACIR json moves), so the
-      # check holds from here on.
       - name: nargo fmt
         run: |
           set -euo pipefail

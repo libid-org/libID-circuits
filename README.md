@@ -24,10 +24,7 @@ support, which fits libID's client-side proving use case almost perfectly.
 | `circuits/bearer-link-github` | `bearer_link_github` | The same relation for GitHub: the bearer link, and the committed `id` (a JSON integer, its digits alone) and `login` opened, checked against GitHub's rules, the login folded, and output as `SHA256("libid.github.user-id" \|\| id)` and `SHA256("libid.github.handle" \|\| fold(login))`. The same 72 public inputs. |
 | `circuits/oidc-google` | `oidc_google` | Possession of a Google OIDC JWT: verifies the RSASSA-PKCS1-v1_5 signature over `header.payload` and exposes the Authorization Digest carried in `nonce`, `SHA256(aud)`, the id node `SHA256("libid.google.user-id" \|\| sub)`, the handle node `SHA256("libid.google.handle" \|\| fold(email))` (the `sub` and the address stay private; the address is checked against the Google rules and folded in the circuit), `exp`, and the modulus that verified. The Platform Verifier alone decides whether that modulus is trusted. |
 
-Sources were extracted byte-verbatim from the original monorepo and then
-formatted once with `nargo fmt` (verified to leave the vk byte-identical;
-only debug metadata in the ACIR json moves); CI enforces `nargo fmt --check`
-from there on.
+CI enforces `nargo fmt --check` on every package.
 
 `lib/identity` is the library the identity circuits share: commitment
 openings, the tagged node hash, the handle and id rules, and `identity_link`,
@@ -96,9 +93,10 @@ rm -f "$dir/x.toml" "$dir/x.gz"
 ```
 
 `nargo execute` appends `.toml` to the `-p` name and `.gz` to the witness
-name. Without the witness name it writes `circuits/<circuit>/target/<package>.gz`;
-an existing file there keeps its mode (group-readable by default), so delete
-`target/*.gz` after proving.
+name. Without the witness name it writes the solved witness, which holds the
+bearer too, to `circuits/<circuit>/target/<package>.gz`, under the umask for a
+new file and keeping the mode of an existing one (group-readable after an
+ordinary build): delete `target/*.gz` after proving.
 
 ## Toolchain
 
@@ -267,13 +265,3 @@ Verification keys under the pinned toolchain (nargo 1.0.0-rc.3, bb 6.0.0-rc.2):
 | `bearer-link-x` | `0x1f09866b4c8feca602a2d394a5c8c924d3b8d964696f0214252ab97c9213775d` |
 | `bearer-link-github` | `0x1168344f46c63b1fa251c174f4b4d4e7c104cf65ab38d36fcbcf66108e626770` |
 | `oidc-google` | `0x2b2c5f9b3301f9ba7b6d69db7baaebc124b09959b7fb7ae87734ecb56667a488` |
-
-All three keys differ from v0.5.0's, which nargo 1.0.0-beta.25 and bb 5.2.0
-built. Barretenberg 6 proves ROM reads with a log-derivative lookup and
-derives full-width Fiat-Shamir challenges, so every key and verifier differs
-from bb 5's. `bearer-link-x` and `bearer-link-github` replace v0.5.0's single
-`bearer-link` (`0x1d161afb536683d31a3e426db0feaa30de8be89cc45510579f361266c20e078f`),
-and `oidc-google`
-(`0x29fdabfacc34aac98d8d44158c1f1ba51b3d97da24c82305908ea33bb18c585c` in
-v0.5.0) publishes the handle node of the folded address. The deployed
-verifiers roll with the next release.
