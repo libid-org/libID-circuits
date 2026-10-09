@@ -147,8 +147,8 @@ fn main(
     // The address as signed, checked against the Google rules and folded.
     // The rules' character set has no `"`, so a prover cannot widen the value
     // to `a@b.com","name":"x` and land the closing-quote check below on the
-    // next member's quote; they also zero the tail past `email_len`, so the
-    // node has one preimage.
+    // next member's quote. They also require the tail past `email_len` zero,
+    // which the node does not hash, so the address has one padded witness.
     let folded = normalize_handle(email_bytes, email_len, HANDLE_RULES_GOOGLE);
     assert(payload_json[email_offset + EMAIL_PREFIX_LEN + email_len] == 34); // closing `"`
     assert_structural(
@@ -191,8 +191,9 @@ fn main(
         }
     }
     // REQ-PLAT-04: printable ASCII without `"` or `\`, nonempty, at most 31
-    // bytes, zero-padded, so no byte past the `sub` reaches the node. Only
-    // the node leaves the circuit, so no later role can check these bytes.
+    // bytes. The tail past `sub_len`, which the node does not hash, must be
+    // zero, so the `sub` has one padded witness. Only the node leaves the
+    // circuit, so no later role can check these bytes.
     check_id(sub_bytes, sub_len, ID_RULES_GOOGLE);
     assert(payload_json[sub_offset + SUB_PREFIX_LEN + sub_len] == 34); // closing `"`
     assert_structural(payload_json[sub_offset + SUB_PREFIX_LEN + sub_len + 1]);

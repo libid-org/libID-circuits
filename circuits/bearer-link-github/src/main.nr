@@ -1,21 +1,11 @@
-// libID bearer-link circuit for GitHub: the bearer link, plus the account's
-// id and login as keys.
+// libID bearer-link circuit for GitHub: `libid_identity::identity_link` with
+// GitHub's tags and rules (REQ-PLAT-52). The login is the handle.
 //
 // The ceremony notarizes two TLS sessions: the token exchange
 // (`/login/oauth/access_token`) and the identity read (`/user`). Each commits
 // the same OAuth bearer behind its own blinder. The identity response reveals
-// only the anchors around `id` and `login`; the two VALUES are committed,
+// only the anchors around `id` and `login`; the two values are committed,
 // each as its own range -- the id's digits alone, its `,` or `}` revealed.
-//
-// This circuit proves:
-//   1. one hidden bearer opens both bearer commitments (REQ-PLAT-52);
-//   2. the RAW id and the RAW login open their commitments -- the bytes
-//      GitHub sent, before any transform;
-//   3. the raw id is a JSON integer without a leading zero, and the raw login
-//      is a GitHub login;
-//   4. idNode     = SHA256("libid.github.user-id" || raw id)
-//      handleNode = SHA256("libid.github.handle"  || fold(raw login)),
-//      the fold applied byte by byte to the same witness that opened (2).
 //
 // Public inputs, in order (72 fields):
 //   0-31   token_commitment     one byte per field

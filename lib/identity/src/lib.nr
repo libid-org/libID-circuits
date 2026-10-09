@@ -1,11 +1,5 @@
-// libID identity: the relation every identity circuit shares.
-//
-// A platform's id and handle become keys here and nowhere else. The circuit
-// opens the values the platform sent, checks them against the platform's
-// rules, folds the handle, and outputs
-//
-//   idNode     = SHA256(id tag     || id)
-//   handleNode = SHA256(handle tag || fold(handle))
+// libID identity: what every identity circuit shares, and `identity_link`,
+// the bearer-link relation.
 //
 // The rules, the tags and the vector table are generated from libid-contracts'
 // `solidity/contracts/handles/handles.json` into `table.nr`; the algorithm
@@ -67,8 +61,8 @@ pub fn constrain_bearer(bearer: [u8; MAX_BEARER_LEN], bearer_len: u32) {
 /// A tlsn hash commitment, `SHA256(plaintext[0..plaintext_len] || blinder)`.
 ///
 /// `TOTAL` is the caller's `MAX_PLAIN + BLINDER_LEN`; Noir array types cannot
-/// express the sum. The bytes past `plaintext_len` are not hashed, so a caller
-/// constrains them (every caller here requires them zero).
+/// express the sum. The bytes past `plaintext_len` are not hashed; every
+/// caller here requires them zero, so a value has one padded witness.
 pub fn hash_commit<let MAX_PLAIN: u32, let TOTAL: u32>(
     plaintext_padded: [u8; MAX_PLAIN],
     plaintext_len: u32,
@@ -91,8 +85,9 @@ pub fn hash_commit<let MAX_PLAIN: u32, let TOTAL: u32>(
 
 /// `SHA256(tag || value[0..len])`, the node of a checked value.
 ///
-/// `TOTAL` is `TAG + MAX`. The value's tail is not hashed; the checks below
-/// require it zero, so a padded buffer has one node.
+/// `TOTAL` is `TAG + MAX`. The value's tail is not hashed, so it does not
+/// change the node; the checks below require it zero so that a value has one
+/// padded witness.
 pub fn tagged_hash<let TAG: u32, let MAX: u32, let TOTAL: u32>(
     tag: [u8; TAG],
     value: [u8; MAX],
@@ -125,9 +120,8 @@ pub fn halves(digest: [u8; 32]) -> [Field; 2] {
 /// A node as the public inputs carry it: `halves(SHA256(tag || value[0..len]))`.
 ///
 /// `value` is a checked id (`check_id`) or a folded handle (what
-/// `normalize_handle` returns); the checks zero its tail, so a padded buffer
-/// has one node. The caller runs the check where its constraint order puts
-/// it.
+/// `normalize_handle` returns). The caller runs the check where its
+/// constraint order puts it.
 pub fn node_halves<let TAG: u32, let MAX: u32>(
     tag: [u8; TAG],
     value: [u8; MAX],
@@ -228,8 +222,8 @@ pub fn check_id<let MAX: u32>(raw: [u8; MAX], len: u32, rules: IdRules) {
 ///   2. the RAW id and the RAW handle open their commitments -- the bytes the
 ///      platform sent, before any transform;
 ///   3. the raw id meets `id_rules` and the raw handle meets `handle_rules`;
-///      both checks also require a zero tail, so the bytes the commitments
-///      do not hash are not free;
+///      both checks also require a zero tail, so each value has one padded
+///      witness (the hashes read only the first `len` bytes);
 ///   4. id_node     = SHA256(id_tag     || raw id)
 ///      handle_node = SHA256(handle_tag || fold(raw handle)),
 ///      the fold applied byte by byte to the same witness that opened (2).
@@ -237,7 +231,7 @@ pub fn check_id<let MAX: u32>(raw: [u8; MAX], len: u32, rules: IdRules) {
 /// So the signed commitment and the output node are tied through the
 /// constrained fold: a node is a key only for the handle the platform
 /// returned. A circuit's main passes its own inputs through in order and
-/// selects the platform's constants; the public inputs are main's.
+/// selects the platform's tags and rules; the public inputs are main's.
 pub fn identity_link<let ID_TAG: u32, let HANDLE_TAG: u32, let MAX_ID: u32, let MAX_HANDLE: u32>(
     id_tag: [u8; ID_TAG],
     handle_tag: [u8; HANDLE_TAG],

@@ -1,23 +1,11 @@
-// libID bearer-link circuit for X: the bearer link, plus the account's id
-// and handle as keys.
+// libID bearer-link circuit for X: `libid_identity::identity_link` with X's
+// tags and rules (REQ-PLAT-32).
 //
 // The ceremony notarizes two TLS sessions: the token session
 // (`/2/oauth2/token`) and the identity session (`/2/users/me`). Each commits
 // the same OAuth bearer behind its own blinder. The identity response reveals
-// only the anchors around `id` and `username`; the two VALUES are committed,
+// only the anchors around `id` and `username`; the two values are committed,
 // each as its own range.
-//
-// This circuit proves:
-//   1. one hidden bearer opens both bearer commitments (REQ-PLAT-32);
-//   2. the RAW id and the RAW handle open their commitments -- the bytes X
-//      sent, before any transform;
-//   3. the raw id is X's id shape, and the raw handle is an X handle;
-//   4. idNode     = SHA256("libid.x.user-id" || raw id)
-//      handleNode = SHA256("libid.x.handle"  || fold(raw handle)),
-//      the fold applied byte by byte to the same witness that opened (2).
-//
-// So the signed commitment and the output node are tied through the
-// constrained fold: a node is a key only for the handle X returned.
 //
 // Public inputs, in order (72 fields):
 //   0-31   token_commitment     one byte per field
