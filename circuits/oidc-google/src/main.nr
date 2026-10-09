@@ -100,7 +100,7 @@ fn main(
     authorization_digest: pub [u8; DIGEST_LEN],
     // Full SHA-256(client_id), packed as two big-endian 16-byte Fields.
     audience_hash: pub [Field; 2],
-    // SHA-256(`libid.google.user-id` || `sub`) as halves; the `sub` stays private.
+    // SHA-256(`libid.google.user-id` || `sub`) as halves; the `sub` is not disclosed.
     id_node: pub [Field; 2],
     // SHA-256(`libid.google.handle` || folded address) as halves.
     handle_node: pub [Field; 2],

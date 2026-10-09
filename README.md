@@ -20,9 +20,14 @@ support, which fits libID's client-side proving use case almost perfectly.
 
 | Circuit | Package | Proves |
 |---|---|---|
-| `circuits/bearer-link-x` | `bearer_link_x` | X's bearer link plus the account as keys. The identity response reveals only the anchors around `id` and `username`; the circuit opens the two committed values as X sent them, checks them against X's rules, folds the handle, and outputs `idNode = SHA256("libid.x.user-id" \|\| id)` and `handleNode = SHA256("libid.x.handle" \|\| fold(handle))`. 12 public inputs: the two bearer commitments, the id and handle commitments and the two nodes, each as two 16-byte halves. Neither value reaches the chain. The bearer is at most 128 bytes. |
+| `circuits/bearer-link-x` | `bearer_link_x` | X's bearer link plus the account as keys. The identity response reveals only the anchors around `id` and `username`; the circuit opens the two committed values as X sent them, checks them against X's rules, folds the handle, and outputs `idNode = SHA256("libid.x.user-id" \|\| id)` and `handleNode = SHA256("libid.x.handle" \|\| fold(handle))`. 12 public inputs: the two bearer commitments, the id and handle commitments and the two nodes, each as two 16-byte halves. Neither value appears in plaintext; see the note below the table. The bearer is at most 128 bytes. |
 | `circuits/bearer-link-github` | `bearer_link_github` | The same relation for GitHub: the bearer link, and the committed `id` (a JSON integer, its digits alone) and `login` opened, checked against GitHub's rules, the login folded, and output as `SHA256("libid.github.user-id" \|\| id)` and `SHA256("libid.github.handle" \|\| fold(login))`. The same 12 public inputs. The bearer is at most 47 bytes; a `gho_` token is 40. |
-| `circuits/oidc-google` | `oidc_google` | Possession of a Google OIDC JWT: verifies the RSASSA-PKCS1-v1_5 signature over `header.payload` and exposes the Authorization Digest carried in `nonce`, `SHA256(aud)`, the id node `SHA256("libid.google.user-id" \|\| sub)`, the handle node `SHA256("libid.google.handle" \|\| fold(email))` (the `sub` and the address stay private; the address is checked against the Google rules and folded in the circuit), `exp`, and the modulus that verified. The Platform Verifier alone decides whether that modulus is trusted. |
+| `circuits/oidc-google` | `oidc_google` | Possession of a Google OIDC JWT: verifies the RSASSA-PKCS1-v1_5 signature over `header.payload` and exposes the Authorization Digest carried in `nonce`, `SHA256(aud)`, the id node `SHA256("libid.google.user-id" \|\| sub)`, the handle node `SHA256("libid.google.handle" \|\| fold(email))` (the `sub` and the address are not disclosed; the address is checked against the Google rules and folded in the circuit), `exp`, and the modulus that verified. The Platform Verifier alone decides whether that modulus is trusted. |
+
+A node is an unsalted tagged SHA-256, so anyone can hash a guess and compare.
+The id and handle are not disclosed, which is weaker than secret. In the
+bearer-link flows their byte lengths are public. GitHub ids are sequential, so
+a GitHub id node is effectively public.
 
 CI enforces `nargo fmt --check` on every package.
 
