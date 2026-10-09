@@ -252,8 +252,8 @@ pub fn identity_link<let ID_TAG: u32, let HANDLE_TAG: u32, let MAX_BEARER: u32, 
     handle: [u8; MAX_HANDLE],
     handle_len: u32,
     blinder_handle: [u8; BLINDER_LEN],
-    token_commitment: [u8; 32],
-    identity_commitment: [u8; 32],
+    token_commitment: [Field; 2],
+    identity_commitment: [Field; 2],
     id_commitment: [Field; 2],
     handle_commitment: [Field; 2],
     id_node: [Field; 2],
@@ -262,12 +262,20 @@ pub fn identity_link<let ID_TAG: u32, let HANDLE_TAG: u32, let MAX_BEARER: u32, 
     // 1. The bearer link.
     constrain_bearer(bearer, bearer_len);
     assert(
-        hash_commit::<MAX_BEARER, MAX_BEARER + BLINDER_LEN>(bearer, bearer_len, blinder_token)
+        halves(hash_commit::<MAX_BEARER, MAX_BEARER + BLINDER_LEN>(
+            bearer,
+            bearer_len,
+            blinder_token,
+        ))
             == token_commitment,
         "token bearer commitment mismatch",
     );
     assert(
-        hash_commit::<MAX_BEARER, MAX_BEARER + BLINDER_LEN>(bearer, bearer_len, blinder_identity)
+        halves(hash_commit::<MAX_BEARER, MAX_BEARER + BLINDER_LEN>(
+            bearer,
+            bearer_len,
+            blinder_identity,
+        ))
             == identity_commitment,
         "identity bearer commitment mismatch",
     );

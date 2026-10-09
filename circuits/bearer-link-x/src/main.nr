@@ -7,15 +7,16 @@
 // only the anchors around `id` and `username`; the two values are committed,
 // each as its own range.
 //
-// Public inputs, in order (72 fields):
-//   0-31   token_commitment     one byte per field
-//   32-63  identity_commitment  one byte per field
-//   64-65  id_commitment        [high, low] 16-byte big-endian halves
-//   66-67  handle_commitment    halves
-//   68-69  id_node              halves
-//   70-71  handle_node          halves
-// The Platform Verifier writes 0-67 from the records the notary signed, never
-// from the payload. 68-71 are the nodes the payload claims and the claim
+// Public inputs, in order (12 fields), each 32-byte value as two 16-byte
+// big-endian halves [high, low]:
+//   0-1    token_commitment
+//   2-3    identity_commitment
+//   4-5    id_commitment
+//   6-7    handle_commitment
+//   8-9    id_node
+//   10-11  handle_node
+// The Platform Verifier writes 0-7 from the records the notary signed, never
+// from the payload. 8-11 are the nodes the payload claims and the claim
 // returns; this proof is what binds them to the committed values.
 
 use libid_identity::{
@@ -38,8 +39,8 @@ fn main(
     handle_len: u32,
     blinder_handle: [u8; BLINDER_LEN],
     // --- Public ---
-    token_commitment: pub [u8; 32],
-    identity_commitment: pub [u8; 32],
+    token_commitment: pub [Field; 2],
+    identity_commitment: pub [Field; 2],
     id_commitment: pub [Field; 2],
     handle_commitment: pub [Field; 2],
     id_node: pub [Field; 2],
@@ -87,8 +88,8 @@ struct Case {
     id_len: u32,
     handle: [u8; MAX_HANDLE_X],
     handle_len: u32,
-    token_commitment: [u8; 32],
-    identity_commitment: [u8; 32],
+    token_commitment: [Field; 2],
+    identity_commitment: [Field; 2],
     id_commitment: [Field; 2],
     handle_commitment: [Field; 2],
     id_node: [Field; 2],
@@ -104,12 +105,12 @@ fn case() -> Case {
         handle: padded("Al_1".as_bytes()),
         handle_len: 4,
         token_commitment: [
-            13, 195, 106, 174, 167, 138, 231, 116, 69, 94, 154, 13, 119, 74, 173, 82, 8, 74, 171,
-            124, 164, 174, 2, 135, 110, 6, 74, 231, 193, 128, 226, 253,
+            18294625605588383709122521013680778578,
+            11021532101111187078447128780644344573,
         ],
         identity_commitment: [
-            154, 239, 70, 3, 22, 146, 248, 48, 167, 68, 88, 44, 176, 247, 149, 202, 48, 22, 213, 85,
-            245, 110, 223, 118, 86, 36, 246, 209, 76, 216, 24, 41,
+            205943490313409956820245415027323409866,
+            63921501292160984142515395269079078953,
         ],
         id_commitment: [
             180882572271038392724240957031789911607,
