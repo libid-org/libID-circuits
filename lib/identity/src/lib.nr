@@ -1,12 +1,14 @@
 // libID identity: what every identity circuit shares, and `identity_link`,
 // the bearer-link relation.
 //
-// The rules, the tags and the vector table are generated from libid-contracts'
-// `solidity/contracts/handles/handles.json` into `table.nr`; the algorithm
-// below is written by hand, as it is in Solidity, Rust and TypeScript, and the
-// generated tests run it against the same table those languages run.
+// The rules and the tags are generated from libid-contracts'
+// `solidity/contracts/handles/handles.json` into `table.nr`, and the vector
+// table into `table_tests.nr`; the algorithm below is written by hand, as it
+// is in Solidity, Rust and TypeScript, and the generated tests run it against
+// the same table those languages run.
 
 pub mod table;
+mod table_tests;
 pub mod testing;
 mod tests;
 

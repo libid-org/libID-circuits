@@ -28,13 +28,13 @@ CI enforces `nargo fmt --check` on every package.
 
 `lib/identity` is the library the identity circuits share: commitment
 openings, the tagged node hash, the handle and id rules, and `identity_link`,
-the relation both bearer-link circuits run with their platform's constants. Its constants and
-its test table, `src/table.nr`, are generated from libID-contracts'
-`solidity/contracts/handles/handles.json`, the table Solidity, Rust and
-TypeScript run too:
+the relation both bearer-link circuits run with their platform's constants. Its constants,
+`src/table.nr`, and the vector tests beside them, `src/table_tests.nr`, are
+generated from libID-contracts' `solidity/contracts/handles/handles.json`, the
+table Solidity, Rust and TypeScript run too:
 
 ```sh
-# from a libID-contracts checkout, with nargo on PATH
+# from a libID-contracts checkout, with nargo on PATH; writes both files
 scripts/regen-identity-handles.py --noir-out ../libid-circuits/lib/identity/src/table.nr
 ```
 
@@ -45,7 +45,8 @@ table.
 `contracts.ref` pins the libID-contracts commit whose `handles.json` this
 table must match. CI fetches that commit and runs its
 `scripts/regen-identity-handles.py --compare-noir` against
-`lib/identity/src/table.nr`. At the same commit it checks that
+`lib/identity/src/table.nr`, and `--compare-noir-tests` against
+`lib/identity/src/table_tests.nr`. At the same commit it checks that
 `fixtures/{x,github}-identity-link-witness.json` hold the
 `identity_link_witness` members of
 `solidity/contracts/ceremony/test/fixtures/{x,github}-ceremony-session.json`,
@@ -59,7 +60,9 @@ pin after regenerating the table:
 
 ```sh
 git -C ../libid-contracts rev-parse HEAD > contracts.ref
-(cd ../libid-contracts && scripts/regen-identity-handles.py --compare-noir "$OLDPWD/lib/identity/src/table.nr")
+(cd ../libid-contracts && scripts/regen-identity-handles.py \
+  --compare-noir "$OLDPWD/lib/identity/src/table.nr" \
+  --compare-noir-tests "$OLDPWD/lib/identity/src/table_tests.nr")
 ```
 
 `scripts/identity-link-witness.py` writes a `bearer-link-x` or

@@ -19,7 +19,7 @@
 #                   contract named after the circuit (bearer-link-x ->
 #                   BearerLinkXHonkVerifier); see scripts/gen-verifier.sh.
 #                   Ships so that consumers compile it and never run bb.
-#   handles-table.nr  lib/identity's generated table, the circuit's rules
+#   handles-table.nr  lib/identity's generated table.nr, the circuit's rules
 #                     and tags
 #
 # The vk derives from the ACIR bytecode alone, and the Solidity verifier from

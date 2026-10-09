@@ -110,7 +110,7 @@ jobs:
         run: shellcheck scripts/*.sh
 
       # Every circuit carries its own #[test] fns in src/main.nr, and
-      # lib/identity runs the handles.json vector table (src/table.nr) and
+      # lib/identity runs the handles.json vector table (src/table_tests.nr) and
       # its own tests (src/tests.nr).
       - name: nargo test
         run: |
@@ -171,7 +171,7 @@ jobs:
         run: ./scripts/check-verifiers.sh --artifacts "$RUNNER_TEMP/artifacts"
 
   # ---------------------------------------------------------------------------
-  # Handle table: lib/identity/src/table.nr is what libID-contracts'
+  # Handle table: lib/identity/src/table.nr and table_tests.nr are what libID-contracts'
   # handles.json generates, at the commit contracts.ref pins. The comparison
   # is libID-contracts' own generator, so no rule is restated here. At the
   # same commit, the vendored fixtures are the ceremony session fixtures'
@@ -209,8 +209,11 @@ jobs:
           fi
           git -C libid-contracts checkout -q FETCH_HEAD
 
-      - name: table.nr matches handles.json
-        run: python3 libid-contracts/scripts/regen-identity-handles.py --compare-noir "$GITHUB_WORKSPACE/lib/identity/src/table.nr"
+      - name: table.nr and table_tests.nr match handles.json
+        run: |
+          python3 libid-contracts/scripts/regen-identity-handles.py \
+            --compare-noir "$GITHUB_WORKSPACE/lib/identity/src/table.nr" \
+            --compare-noir-tests "$GITHUB_WORKSPACE/lib/identity/src/table_tests.nr"
 
       # The vendored witnesses are the session fixtures' `identity_link_witness`
       # members, and oidc-google's nonce is their Authorization Digest.
