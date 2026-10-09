@@ -38,7 +38,7 @@ TypeScript run too:
 scripts/regen-identity-handles.py --noir-out ../libid-circuits/lib/identity/src/table.nr
 ```
 
-`scripts/build.sh` copies the table into each identity circuit's artifacts as
+`scripts/build.sh` copies the table into each circuit's artifacts as
 `handles-table.nr`, so a consumer can tell a verifier built from another
 table.
 
@@ -169,8 +169,8 @@ refuse to run under any other version.
   directory: `bearer-link-x/BearerLinkXHonkVerifier.sol`,
   `bearer-link-github/BearerLinkGithubHonkVerifier.sol`,
   `oidc-google/OidcGoogleHonkVerifier.sol`;
-- `handles-table.nr` — identity circuits only: the generated table the
-  circuit's rules and tags come from.
+- `handles-table.nr` — lib/identity's generated table, the circuit's rules
+  and tags.
 
 ```sh
 scripts/build.sh              # build into ./artifacts/ (requires the pinned toolchain)
@@ -252,9 +252,7 @@ Publishing a GitHub Release tagged `v<version>` builds the artifacts from
 source with the pinned toolchain (`scripts/build.sh`) and attaches:
 
 - `libid-circuits-<version>-<circuit>.tar.gz` — one per circuit, containing
-  `<package>.json`, `vk`, `vk_hash`, `<Contract>.sol`, and for the identity
-  circuits (`bearer-link-x`, `bearer-link-github`, `oidc-google`)
-  `handles-table.nr`;
+  `<package>.json`, `vk`, `vk_hash`, `<Contract>.sol` and `handles-table.nr`;
 - `manifest.json` — `{version, tag, toolchain: {nargo, bb}, tarballs:
   {<tarball>: {sha256, files: {<name>: sha256}}}}`.
 
@@ -267,7 +265,7 @@ against its entry in `files`, run `forge fmt` over it under your own
 No `bb`, no nargo: the verifier is derived here, once, by the toolchain the
 manifest names.
 
-For an identity circuit, also check `handles-table.nr` against your
+Also check `handles-table.nr` against your
 `handles.json` with libID-contracts'
 `scripts/regen-identity-handles.py --compare-noir handles-table.nr`. A
 mismatch means the verifier keys handles by another table.

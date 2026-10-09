@@ -19,9 +19,8 @@
 #                   contract named after the circuit (bearer-link-x ->
 #                   BearerLinkXHonkVerifier); see scripts/gen-verifier.sh.
 #                   Ships so that consumers compile it and never run bb.
-#   handles-table.nr  identity circuits only (those depending on
-#                     lib/identity): the generated table the circuit's rules
-#                     and tags come from
+#   handles-table.nr  lib/identity's generated table, the circuit's rules
+#                     and tags
 #
 # The vk derives from the ACIR bytecode alone, and the Solidity verifier from
 # the vk alone — so a release tarball is the complete, sufficient input for
@@ -112,14 +111,12 @@ for dir in "$ROOT"/circuits/*/; do
   # names, so a renamed directory fails here instead of at a consumer.
   "$ROOT/scripts/gen-verifier.sh" "$circuit" --artifacts "$OUT"
 
-  # An identity circuit's rules and tags are lib/identity's generated table,
-  # so the table ships with it. A consumer compares it with what its own
+  # Every circuit's rules and tags are lib/identity's generated table, so
+  # the table ships with it. A consumer compares it with what its own
   # handles.json generates (libID-contracts' regen-identity-handles.py
   # --compare-noir); a verifier built from another table keys handles
   # another way.
-  if grep -q '^libid_identity *=' "$dir/Nargo.toml"; then
-    cp "$TABLE" "$OUT/$circuit/handles-table.nr"
-  fi
+  cp "$TABLE" "$OUT/$circuit/handles-table.nr"
 done
 
 echo "OK: artifacts written to $OUT"
