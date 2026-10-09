@@ -27,7 +27,7 @@ pub struct IdRules {
 }
 
 /// Each circuit's bearer cap, the opening's main cost (REQ-PLAT-30/36 allow 4096).
-/// GitHub's 47 keeps bearer || blinder in one SHA-256 block; live X bearers are 91 bytes.
+/// GitHub's 47 keeps bearer-link-github under 2^16; a live X bearer measured 91 bytes.
 pub global MAX_BEARER_LEN_X: u32 = 128;
 pub global MAX_BEARER_LEN_GITHUB: u32 = 47;
 
