@@ -66,8 +66,8 @@ git -C ../libid-contracts rev-parse HEAD > contracts.ref
 ```
 
 `scripts/identity-link-witness.py` writes a `bearer-link-x` or
-`bearer-link-github` `Prover.toml` from the identity-link witness libid-rs
-emits with a ceremony record. The committed ones are written from
+`bearer-link-github` `Prover.toml` from a synthetic identity-link witness.
+The committed ones are written from
 `fixtures/x-identity-link-witness.json` and
 `fixtures/github-identity-link-witness.json`: the `identity_link_witness`
 members of libID-contracts' synthetic
@@ -77,15 +77,8 @@ handles (`Alice_1`, `OctoCat`) exercise the fold, each beside a `provenance`
 object with `"synthetic": true`. CI regenerates both and fails on a
 difference.
 
-### Proving a real capture
-
-A witness is synthetic only in a session file whose `provenance` has
-`"synthetic": true`, as in the two fixtures here. Every other witness, such
-as the bare one a real capture writes, is secret: it holds a live bearer and
-the blinders that link the signed record to the account. For a secret
-witness the script requires `--out`, writes it with mode 0600 and never to
-stdout. Write it outside the repo, and after proving delete it and the
-solved witness (`circuits/<circuit>/target/*.gz`).
+Only synthetic fixtures are witnessed here; the script refuses a file
+without that marker.
 
 ## Toolchain
 

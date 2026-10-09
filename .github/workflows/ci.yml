@@ -134,21 +134,6 @@ jobs:
             diff -u "circuits/bearer-link-$platform/Prover.toml" "$RUNNER_TEMP/bearer-link-$platform.Prover.toml"
           done
 
-      # A witness without the synthetic marker is secret: it never goes to
-      # stdout, and --out is written with mode 0600.
-      - name: Secret witness guard
-        run: |
-          set -euo pipefail
-          script=scripts/identity-link-witness.py
-          bare="$RUNNER_TEMP/capture.json"
-          jq .identity_link_witness fixtures/x-identity-link-witness.json > "$bare"
-          if python3 "$script" "$bare" > "$RUNNER_TEMP/stdout"; then
-            echo "::error::a secret witness was written to stdout"; exit 1
-          fi
-          [ ! -s "$RUNNER_TEMP/stdout" ]
-          python3 "$script" "$bare" --out "$RUNNER_TEMP/secret.toml"
-          [ "$(stat -c %a "$RUNNER_TEMP/secret.toml")" = 600 ]
-
       # Full build: proves every circuit compiles, every vk generates, and
       # every Solidity verifier generates under its pinned contract name with
       # the pinned toolchain — the exact path release.yml runs to produce the
