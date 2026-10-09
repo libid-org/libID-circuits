@@ -19,19 +19,21 @@ use sha256::sha256_var;
 pub global BLINDER_LEN: u32 = 16;
 
 /// What a platform allows in a handle, as `handles.json` states it.
+/// `bytes` maps each raw byte to its fold, or to 0 where the platform
+/// refuses it.
 pub struct HandleRules {
     pub max_len: u32,
-    pub allow_underscore: bool,
     pub allow_hyphen: bool,
     pub is_email: bool,
+    pub bytes: [u8; 256],
 }
 
-/// What a platform allows in an id. `decimal` ids are ASCII digits;
-/// otherwise printable ASCII without `"` or `\`.
+/// What a platform allows in an id. `bytes` says whether each byte may
+/// appear in one.
 pub struct IdRules {
     pub max_len: u32,
-    pub decimal: bool,
     pub leading_zero: bool,
+    pub bytes: [bool; 256],
 }
 
 /// The bearer cap of each bearer-link circuit.
@@ -135,25 +137,6 @@ pub fn node_halves<let TAG: u32, let MAX: u32>(
     halves(tagged_hash::<TAG, MAX, TAG + MAX>(tag, value, len))
 }
 
-/// A-Z down to a-z; every other byte unchanged.
-pub fn fold(b: u8) -> u8 {
-    if (b >= 0x41) & (b <= 0x5a) {
-        b + 0x20
-    } else {
-        b
-    }
-}
-
-fn handle_byte_allowed(c: u8, rules: HandleRules) -> bool {
-    let lower = (c >= 0x61) & (c <= 0x7a);
-    let digit = (c >= 0x30) & (c <= 0x39);
-    let email =
-        rules.is_email & ((c == 0x2e) | (c == 0x2b) | (c == 0x2d) | (c == 0x5f) | (c == 0x40));
-    let underscore = rules.allow_underscore & (c == 0x5f);
-    let hyphen = rules.allow_hyphen & (c == 0x2d);
-    lower | digit | email | underscore | hyphen
-}
-
 /// Check a handle exactly as the platform sent it and return it folded.
 ///
 /// Refuses, never repairs: no byte is trimmed and no `@` is stripped, so a
@@ -172,8 +155,8 @@ pub fn normalize_handle<let MAX: u32>(raw: [u8; MAX], len: u32, rules: HandleRul
     for i in 0..MAX {
         let b = raw[i];
         if i < len {
-            let c = fold(b);
-            assert(handle_byte_allowed(c, rules), "handle byte not allowed");
+            let c = rules.bytes[b as u32];
+            assert(c != 0, "handle byte not allowed");
             out[i] = c;
             if c == 0x40 {
                 ats += 1;
@@ -204,12 +187,7 @@ pub fn check_id<let MAX: u32>(raw: [u8; MAX], len: u32, rules: IdRules) {
     for i in 0..MAX {
         let b = raw[i];
         if i < len {
-            let ok = if rules.decimal {
-                (b >= 0x30) & (b <= 0x39)
-            } else {
-                (b >= 0x20) & (b <= 0x7e) & (b != 0x22) & (b != 0x5c)
-            };
-            assert(ok, "id byte not allowed");
+            assert(rules.bytes[b as u32], "id byte not allowed");
         } else {
             assert(b == 0, "id tail must be zero-padded");
         }

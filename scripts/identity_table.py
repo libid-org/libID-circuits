@@ -40,7 +40,7 @@ def byte_array(name: str, source: pathlib.Path = TABLE) -> bytes:
 
 
 def fold(value: bytes) -> bytes:
-    """A-Z down to a-z, every other byte unchanged: lib.nr's `fold`."""
+    """A-Z down to a-z, every other byte unchanged: the fold table.nr's HANDLE_BYTES tables apply."""
     return bytes(b + 0x20 if 0x41 <= b <= 0x5A else b for b in value)
 
 
