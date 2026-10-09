@@ -52,17 +52,10 @@ table must match. CI fetches that commit and runs its
 and that `scripts/google-fixture-witness.py`'s `DIGEST` is those sessions'
 `authorization_digest`. It needs git and Python only.
 
-The pin must name a commit libID-contracts serves. A change that spans both
-repositories merges in this order:
-
-1. merge the libID-contracts change (its `handles.json`, its session
-   fixtures) into libID-contracts' main;
-2. point `contracts.ref` at the resulting commit on main, then merge here.
-
-A pin to a commit that exists only on a feature branch passes while that
-branch exists and fails once it is deleted after a squash or rebase merge;
-the CI error names this fix. To move the pin after regenerating the table
-from a newer `handles.json`, write the new commit's full SHA:
+The pin must be a commit on libID-contracts' main: a change spanning both
+repositories merges there first, then `contracts.ref` moves to the merged
+commit. A feature-branch pin fails once that branch is deleted. To move the
+pin after regenerating the table:
 
 ```sh
 git -C ../libid-contracts rev-parse HEAD > contracts.ref
@@ -90,27 +83,6 @@ the blinders that link the signed record to the account. For a secret
 witness the script requires `--out`, writes it with mode 0600 and never to
 stdout. Write it outside the repo, and after proving delete it and the
 solved witness (`circuits/<circuit>/target/*.gz`).
-
-### Consumers that must move
-
-The three circuits replace v0.6.0's ABIs: the shared `bearer_link` circuit
-(two public inputs, the bearer commitments) becomes `bearer_link_x` and
-`bearer_link_github` (72 each), and `oidc_google`'s `user_id_hash` and
-`email_packed` become `id_node` and `handle_node`. Every prover and verifier
-pinned to v0.6.0 moves with them:
-
-- libID's browser prover, `ts/packages/ceremony` on libID's main, pins
-  libid-circuits v0.6.0: it proves the shared `bearer_link` circuit for X and
-  GitHub and v0.6.0's `oidc_google` ABI. It must commit the identity
-  response's id and handle each as its own range, as libid-rs does, pass
-  their openings and nodes to the platform's bearer-link circuit, take
-  `oidc_google`'s new node inputs, and pin the first release that ships
-  these circuits.
-- libID-contracts deploys the verifiers of that same release, and its
-  `handles.json` at `contracts.ref` is the table they are built from.
-
-None of these circuits is released yet; the release after v0.6.0 carries
-them, and the browser prover and the verifiers move to it together.
 
 ## Toolchain
 
