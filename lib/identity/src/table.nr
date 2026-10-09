@@ -13,7 +13,7 @@ use crate::{HandleRules, IdRules};
 
 /// SHA-256 of the handles.json this file was generated from.
 pub global TABLE_SHA256: str<64> =
-    "bacafa6023dd82852f753efa04635b36899b881f5d37fe15260e7dd532272560";
+    "5d4c0d0db7fbab4307f7ae93add39f99344cded07e5bc8fef662369619940029";
 
 /// `libid.x.user-id`
 pub global USER_ID_TAG_X: [u8; 15] =
@@ -65,7 +65,7 @@ pub global ID_BYTES_X: [bool; 256] = [
 ];
 pub global HANDLE_RULES_X: HandleRules =
     HandleRules { max_len: 15, allow_hyphen: false, is_email: false, bytes: HANDLE_BYTES_X };
-pub global ID_RULES_X: IdRules = IdRules { max_len: 20, leading_zero: true, bytes: ID_BYTES_X };
+pub global ID_RULES_X: IdRules = IdRules { max_len: 20, leading_zero: false, bytes: ID_BYTES_X };
 
 /// `libid.github.user-id`
 pub global USER_ID_TAG_GITHUB: [u8; 20] = [
