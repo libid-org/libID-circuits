@@ -1,19 +1,7 @@
 #!/usr/bin/env python3
 """Write a bearer-link-x or bearer-link-github Prover.toml from a synthetic
-identity-link witness.
-
-The input is a session file whose `identity_link_witness` member holds the
-witness (the bearer, the id and the handle, each with the blinder of its
-commitment) and whose `provenance` is an object with `"synthetic": true`, as
-in this repo's fixtures/*-identity-link-witness.json. Anything else is
-refused.
-
-The platform must be `x` or `github`, the platforms with a bearer-link
-circuit. The public inputs are computed here, with hashlib, from the raw
-values: each commitment is SHA256(value || blinder) and must equal the one the
-witness states; the nodes are SHA256(tag || id) and SHA256(tag || folded
-handle). The circuit computes the same things its own way; a disagreement
-fails `nargo execute`.
+witness such as fixtures/*-identity-link-witness.json. Public inputs are
+computed with hashlib, independently of the circuit.
 
 Usage:
   scripts/identity-link-witness.py <session fixture> [--out Prover.toml]
@@ -31,7 +19,7 @@ sys.dont_write_bytecode = True
 import identity_table  # noqa: E402  (beside this script)
 
 
-# The platforms with a bearer-link circuit, circuits/bearer-link-<platform>.
+# circuits/bearer-link-<platform>
 PLATFORMS = ("x", "github")
 
 

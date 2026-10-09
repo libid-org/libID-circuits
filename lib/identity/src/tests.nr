@@ -1,6 +1,4 @@
-// Tests of lib.nr beside the generated vector table. Every expected hash
-// comes from an independent Python computation (hashlib over the bytes
-// written out in the comment), not from this library.
+// Tests of lib.nr. Expected hashes are Python hashlib's, not this library's.
 
 use crate::{
     BLINDER_LEN, check_id, constrain_bearer, hash_commit, MAX_BEARER_LEN_GITHUB, MAX_BEARER_LEN_X,
@@ -18,8 +16,7 @@ fn an_empty_bearer_is_refused() {
 
 #[test(should_fail_with = "bearer byte below printable ASCII")]
 fn a_carriage_return_is_refused() {
-    // REQ-COMMON-37: the identity session sends this range inside a header,
-    // so a CR would smuggle a second header line into it.
+    // REQ-COMMON-37: a CR would add a header line.
     let mut bearer: [u8; MAX_BEARER_LEN_X] = [0; MAX_BEARER_LEN_X];
     bearer[0] = 0x61;
     bearer[1] = 0x0d;
@@ -137,8 +134,7 @@ fn hash_commit_covers_the_shortest_and_longest_bearer() {
 
 #[test]
 fn independent_blinders_give_different_commitments() {
-    // The same bearer commits to two values, so nothing outside a proof links
-    // the two sessions (REQ-COMMON-44).
+    // REQ-COMMON-44: nothing outside a proof links the two sessions.
     let bearer: [u8; MAX_BEARER_LEN_X] = [0x7e; MAX_BEARER_LEN_X];
     let other: [u8; BLINDER_LEN] = [0x42; BLINDER_LEN];
     let a = hash_commit::<MAX_BEARER_LEN_X, MAX_BEARER_LEN_X + BLINDER_LEN>(
@@ -193,8 +189,7 @@ fn the_bytes_past_the_handle_change_nothing() {
 
 #[test]
 fn each_platform_s_buffers_are_its_rules_lengths() {
-    // table.nr states each length twice, as a buffer size and in the rules;
-    // the circuits size their inputs by the first and check by the second.
+    // Each buffer size equals its rules' max_len.
     assert(table::MAX_HANDLE_X == table::HANDLE_RULES_X.max_len);
     assert(table::MAX_ID_X == table::ID_RULES_X.max_len);
     assert(table::MAX_HANDLE_GITHUB == table::HANDLE_RULES_GITHUB.max_len);

@@ -1,11 +1,5 @@
-// libID identity: what every identity circuit shares, and `identity_link`,
-// the bearer-link relation.
-//
-// The rules and the tags are generated from libid-contracts'
-// `solidity/contracts/handles/handles.json` into `table.nr`, and the vector
-// table into `table_tests.nr`; the algorithm below is written by hand, as it
-// is in Solidity, Rust and TypeScript, and the generated tests run it against
-// the same table those languages run.
+// libID identity: what the identity circuits share, and `identity_link`.
+// `table.nr` and `table_tests.nr` are generated from libID-contracts' handles.json.
 
 pub mod table;
 mod table_tests;
@@ -14,8 +8,7 @@ mod tests;
 
 use sha256::sha256_var;
 
-/// Blinder width of a tlsn hash commitment. The notary secret-shares this
-/// value and appends it to the committed range before SHA-256.
+/// Blinder width of a tlsn hash commitment.
 pub global BLINDER_LEN: u32 = 16;
 
 /// What a platform allows in a handle, as `handles.json` states it.
@@ -36,22 +29,13 @@ pub struct IdRules {
     pub bytes: [bool; 256],
 }
 
-/// The bearer cap of each bearer-link circuit.
-///
-/// REQ-PLAT-30 and REQ-PLAT-36 permit up to 4096 bytes. The cap is the bearer
-/// opening's whole cost driver, so each circuit sets the smallest value its
-/// platform is known to fit. GitHub's `gho_` tokens are 40 bytes, and 47 is
-/// the largest cap whose commitment preimage, bearer and blinder, fits a
-/// buffer shorter than one 64-byte SHA-256 block. X documents no length; its
-/// cap is 128, and a live X bearer is 91 bytes.
+/// Each circuit's bearer cap, the opening's main cost (REQ-PLAT-30/36 allow 4096).
+/// GitHub's 47 keeps bearer || blinder in one SHA-256 block; live X bearers are 91 bytes.
 pub global MAX_BEARER_LEN_X: u32 = 128;
 pub global MAX_BEARER_LEN_GITHUB: u32 = 47;
 
-/// Constrain an opened bearer: nonempty, printable ASCII (REQ-PLAT-30,
-/// REQ-PLAT-36, REQ-COMMON-20). `0x20`-`0x7e` excludes CR and LF, so
-/// REQ-COMMON-37 holds by construction -- the identity session sends this
-/// range inside an HTTP header. The bytes past `bearer_len` are no part of
-/// the bearer and are not read.
+/// An opened bearer: nonempty, printable ASCII (REQ-PLAT-30, REQ-PLAT-36,
+/// REQ-COMMON-20). No CR or LF, so REQ-COMMON-37 holds. The tail is not read.
 pub fn constrain_bearer<let MAX: u32>(bearer: [u8; MAX], bearer_len: u32) {
     assert(bearer_len != 0, "bearer must not be empty");
     assert(bearer_len <= MAX, "bearer too long");
@@ -65,10 +49,7 @@ pub fn constrain_bearer<let MAX: u32>(bearer: [u8; MAX], bearer_len: u32) {
 }
 
 /// A tlsn hash commitment, `SHA256(plaintext[0..plaintext_len] || blinder)`.
-///
-/// `TOTAL` is the caller's `MAX_PLAIN + BLINDER_LEN`; Noir array types cannot
-/// express the sum. The bytes past `plaintext_len` are not hashed, so they do
-/// not change the commitment.
+/// `TOTAL` is `MAX_PLAIN + BLINDER_LEN`; Noir array types cannot express the sum.
 pub fn hash_commit<let MAX_PLAIN: u32, let TOTAL: u32>(
     plaintext_padded: [u8; MAX_PLAIN],
     plaintext_len: u32,
@@ -87,10 +68,7 @@ pub fn hash_commit<let MAX_PLAIN: u32, let TOTAL: u32>(
     sha256_var(input, plaintext_len + BLINDER_LEN)
 }
 
-/// `SHA256(tag || value[0..len])`, the node of a checked value.
-///
-/// `TOTAL` is `TAG + MAX`. `sha256_var` reads only the first `TAG + len`
-/// bytes, so the value's tail does not change the node.
+/// `SHA256(tag || value[0..len])`, the node of a checked value. `TOTAL` is `TAG + MAX`.
 pub fn tagged_hash<let TAG: u32, let MAX: u32, let TOTAL: u32>(
     tag: [u8; TAG],
     value: [u8; MAX],
@@ -107,9 +85,7 @@ pub fn tagged_hash<let TAG: u32, let MAX: u32, let TOTAL: u32>(
     sha256_var(preimage, TAG + len)
 }
 
-/// A 32-byte value as two big-endian 16-byte Fields, `[high, low]`, the
-/// form a verifier writes a hash or a commitment into the public inputs in.
-/// Each half is below 2^128 by construction.
+/// A 32-byte value as two big-endian 16-byte Fields, `[high, low]`.
 pub fn halves(digest: [u8; 32]) -> [Field; 2] {
     let mut high: Field = 0;
     let mut low: Field = 0;
@@ -121,10 +97,7 @@ pub fn halves(digest: [u8; 32]) -> [Field; 2] {
 }
 
 /// A node as the public inputs carry it: `halves(SHA256(tag || value[0..len]))`.
-///
-/// `value` is a checked id (`check_id`) or a folded handle (what
-/// `normalize_handle` returns). The caller runs the check where its
-/// constraint order puts it.
+/// The caller checks `value` first.
 pub fn node_halves<let TAG: u32, let MAX: u32>(
     tag: [u8; TAG],
     value: [u8; MAX],
@@ -133,13 +106,9 @@ pub fn node_halves<let TAG: u32, let MAX: u32>(
     halves(tagged_hash::<TAG, MAX, TAG + MAX>(tag, value, len))
 }
 
-/// Check a handle exactly as the platform sent it and return it folded.
-///
-/// Refuses, never repairs: no byte is trimmed and no `@` is stripped, so a
-/// value that is not already a handle has no node. The checks run in the
-/// order every language runs them -- empty, too long, each byte, shape -- so
-/// a refused vector is refused for the same reason everywhere. The returned
-/// handle is zero past `len`, whatever `raw` holds there.
+/// Check a handle as the platform sent it and return it folded, zero past `len`.
+/// Refuses, never repairs; checks run in every language's order: empty, too
+/// long, byte, shape.
 pub fn normalize_handle<let MAX: u32>(raw: [u8; MAX], len: u32, rules: HandleRules) -> [u8; MAX] {
     assert(len != 0, "handle is empty");
     assert((len <= MAX) & (len <= rules.max_len), "handle too long");
@@ -190,24 +159,9 @@ pub fn check_id<let MAX: u32>(raw: [u8; MAX], len: u32, rules: IdRules) {
     }
 }
 
-/// The bearer-link relation with the account as keys, for one platform's
-/// tags and rules:
-///
-///   1. one hidden bearer opens both bearer commitments, the token session's
-///      and the identity session's;
-///   2. the RAW id and the RAW handle open their commitments -- the bytes the
-///      platform sent, before any transform;
-///   3. the raw id meets `id_rules` and the raw handle meets `handle_rules`
-///      (the hashes read only the first `len` bytes of each, so the bytes
-///      past it are not checked);
-///   4. id_node     = SHA256(id_tag     || raw id)
-///      handle_node = SHA256(handle_tag || fold(raw handle)),
-///      the fold applied byte by byte to the same witness that opened (2).
-///
-/// So the signed commitment and the output node are tied through the
-/// constrained fold: a node is a key only for the handle the platform
-/// returned. A circuit's main passes its own inputs through in order and
-/// selects the platform's tags and rules; the public inputs are main's.
+/// The bearer-link relation: one bearer opens both bearer commitments, the raw
+/// id and handle open theirs and meet the rules, and the nodes are
+/// SHA256(id_tag || id) and SHA256(handle_tag || fold(handle)).
 pub fn identity_link<let ID_TAG: u32, let HANDLE_TAG: u32, let MAX_BEARER: u32, let MAX_ID: u32, let MAX_HANDLE: u32>(
     id_tag: [u8; ID_TAG],
     handle_tag: [u8; HANDLE_TAG],

@@ -111,11 +111,8 @@ for dir in "$ROOT"/circuits/*/; do
   # names, so a renamed directory fails here instead of at a consumer.
   "$ROOT/scripts/gen-verifier.sh" "$circuit" --artifacts "$OUT"
 
-  # Every circuit's rules and tags are lib/identity's generated table, so
-  # the table ships with it. A consumer compares it with what its own
-  # handles.json generates (libID-contracts' regen-identity-handles.py
-  # --compare-noir); a verifier built from another table keys handles
-  # another way.
+  # Ship the table the circuit's rules and tags come from, for consumers to
+  # compare with their handles.json.
   cp "$TABLE" "$OUT/$circuit/handles-table.nr"
 done
 
