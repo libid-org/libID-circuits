@@ -22,6 +22,9 @@
 #   handles-table.nr  lib/identity's generated table.nr, the circuit's rules
 #                     and tags
 #
+# and <out>/commit: the circuits commit built, with `-dirty` when the tree has
+# modified or untracked files.
+#
 # The vk derives from the ACIR bytecode alone, and the Solidity verifier from
 # the vk alone — so a release tarball is the complete, sufficient input for
 # reproducing every byte of the on-chain verifier.
@@ -77,6 +80,12 @@ fi
 
 TABLE="$ROOT/lib/identity/src/table.nr"
 
+# Read before building, so build output cannot mark the tree dirty.
+commit="$(git -C "$ROOT" rev-parse HEAD)"
+if [[ -n "$(git -C "$ROOT" status --porcelain)" ]]; then
+  commit="$commit-dirty"
+fi
+
 # --- Build -------------------------------------------------------------------
 for dir in "$ROOT"/circuits/*/; do
   circuit="$(basename "$dir")"
@@ -116,4 +125,5 @@ for dir in "$ROOT"/circuits/*/; do
   cp "$TABLE" "$OUT/$circuit/handles-table.nr"
 done
 
-echo "OK: artifacts written to $OUT"
+echo "$commit" > "$OUT/commit"
+echo "OK: artifacts written to $OUT ($commit)"
