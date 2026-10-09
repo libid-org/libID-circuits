@@ -1,6 +1,6 @@
 [package]
-name = "bearer_link"
-type = "bin"
+name = "libid_identity"
+type = "lib"
 authors = ["libID"]
 compiler_version = ">=1.0.0"
 

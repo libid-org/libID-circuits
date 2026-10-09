@@ -7,7 +7,7 @@
 #   scripts/gen-verifier.sh <circuit> [<out.sol>] [--artifacts <dir>] [--contract-name X]
 #
 #   <circuit>          directory name under circuits/ and <artifacts>/
-#                      (bearer-link, oidc-google)
+#                      (bearer-link-x, bearer-link-github, oidc-google)
 #   <out.sol>          output path; default <artifacts>/<circuit>/<Contract>.sol,
 #                      next to the vk, which is the release layout
 #   --artifacts <dir>  where scripts/build.sh wrote (default ./artifacts);
@@ -18,9 +18,9 @@
 #                      (see below)
 #
 # Contract name: bb always emits `HonkVerifier`, and a consumer compiling
-# both verifiers in one project needs distinct names, so the contract is
+# every verifier in one project needs distinct names, so the contract is
 # renamed to <Circuit>HonkVerifier with the directory name in PascalCase:
-# bearer-link -> BearerLinkHonkVerifier. The names the current
+# bearer-link-x -> BearerLinkXHonkVerifier. The names the current
 # circuits ship under are pinned in KNOWN_VERIFIERS below and checked on
 # every run: renaming a circuit directory renames the contract every
 # consumer compiles, so it fails here instead of shipping.
@@ -52,11 +52,12 @@ source "$ROOT/toolchain.env"
 # differently-named contract. A new circuit needs no entry; a rename of one
 # listed here is a breaking change for every consumer and must be deliberate.
 KNOWN_VERIFIERS=(
-  bearer-link=BearerLinkHonkVerifier
+  bearer-link-x=BearerLinkXHonkVerifier
+  bearer-link-github=BearerLinkGithubHonkVerifier
   oidc-google=OidcGoogleHonkVerifier
 )
 
-# bearer-link -> BearerLinkHonkVerifier
+# bearer-link-x -> BearerLinkXHonkVerifier
 verifier_name() {
   local pascal
   pascal="$(printf '%s' "$1" | perl -pe 's/(?:^|-)(\w)/\u$1/g')"

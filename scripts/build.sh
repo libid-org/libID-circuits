@@ -16,9 +16,11 @@
 #                   consumer is an EVM Solidity verifier)
 #   vk_hash         32-byte hash of the vk, as written by the same command
 #   <Contract>.sol  the EVM Solidity verifier bb derives from the vk, the
-#                   contract named after the circuit (bearer-link ->
-#                   BearerLinkHonkVerifier); see scripts/gen-verifier.sh.
+#                   contract named after the circuit (bearer-link-x ->
+#                   BearerLinkXHonkVerifier); see scripts/gen-verifier.sh.
 #                   Ships so that consumers compile it and never run bb.
+#   handles-table.nr  lib/identity's generated table.nr, the circuit's rules
+#                     and tags
 #
 # The vk derives from the ACIR bytecode alone, and the Solidity verifier from
 # the vk alone — so a release tarball is the complete, sufficient input for
@@ -73,6 +75,8 @@ if [[ "$have_bb" != "$BB_VERSION" ]]; then
   exit 1
 fi
 
+TABLE="$ROOT/lib/identity/src/table.nr"
+
 # --- Build -------------------------------------------------------------------
 for dir in "$ROOT"/circuits/*/; do
   circuit="$(basename "$dir")"
@@ -106,6 +110,10 @@ for dir in "$ROOT"/circuits/*/; do
   # names the contract after the circuit directory and checks the pinned
   # names, so a renamed directory fails here instead of at a consumer.
   "$ROOT/scripts/gen-verifier.sh" "$circuit" --artifacts "$OUT"
+
+  # Ship the table the circuit's rules and tags come from, for consumers to
+  # compare with their handles.json.
+  cp "$TABLE" "$OUT/$circuit/handles-table.nr"
 done
 
 echo "OK: artifacts written to $OUT"

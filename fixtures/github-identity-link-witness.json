@@ -1,0 +1,29 @@
+{
+  "provenance": {
+    "synthetic": true,
+    "source": "The identity_link_witness member of libID-contracts' solidity/contracts/ceremony/test/fixtures/github-ceremony-session.json, which libid-rs writes with `cargo run -p libid-tlsn --example ceremony_fixtures`. No real account or bearer."
+  },
+  "identity_link_witness": {
+    "handle": {
+      "blinder": "0xefd54da72e5fe1aa9f438616231eb26d",
+      "commitment": "0xcb76a51a9eed50c38f01a3c2e9d7ca51557c7cfea97a76d1eb0824a8cec2333f",
+      "value": "OctoCat"
+    },
+    "id": {
+      "blinder": "0x1d8375fb6f7380a472f6327efd470118",
+      "commitment": "0x94285be07bbcb7d06e15845de7822c4a0bd13d6210e2afad08dd0857878abe50",
+      "value": "583231"
+    },
+    "identity_bearer": {
+      "blinder": "0x2631c6c187d57b2da6ceec7ff3565948",
+      "commitment": "0xf6c048a06d27f964210b300557a462fd3f8b3e81316b417a40b5ca657e4509c2",
+      "value": "gho_VGhpcyBpcyBub3QgYSByZWFsIGJlYXJlcg"
+    },
+    "platform": "github",
+    "token_bearer": {
+      "blinder": "0xe906469f340e60279fee288dfa21d72c",
+      "commitment": "0x6c698116c9abf9ab89846e5ee03bf56acafb76180010ffd52791e52e26c384f6",
+      "value": "gho_VGhpcyBpcyBub3QgYSByZWFsIGJlYXJlcg"
+    }
+  }
+}
