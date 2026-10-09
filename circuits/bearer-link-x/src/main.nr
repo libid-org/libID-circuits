@@ -21,13 +21,13 @@
 use libid_identity::{
     BLINDER_LEN,
     identity_link,
-    MAX_BEARER_LEN,
+    MAX_BEARER_LEN_X,
     table::{HANDLE_RULES_X, HANDLE_TAG_X, ID_RULES_X, MAX_HANDLE_X, MAX_ID_X, USER_ID_TAG_X},
 };
 
 fn main(
     // --- Private ---
-    bearer: [u8; MAX_BEARER_LEN],
+    bearer: [u8; MAX_BEARER_LEN_X],
     bearer_len: u32,
     blinder_token: [u8; BLINDER_LEN],
     blinder_identity: [u8; BLINDER_LEN],
@@ -81,7 +81,7 @@ use libid_identity::testing::{blinder, padded};
 //   handle node = SHA256("libid.x.handle" || "al_1")
 
 struct Case {
-    bearer: [u8; MAX_BEARER_LEN],
+    bearer: [u8; MAX_BEARER_LEN_X],
     bearer_len: u32,
     id: [u8; MAX_ID_X],
     id_len: u32,

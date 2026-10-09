@@ -98,7 +98,12 @@ def main() -> int:
     user_id, blinder_id = opened(witness, "id")
     handle, blinder_handle = opened(witness, "handle")
 
-    max_bearer = identity_table.integer("MAX_BEARER_LEN", identity_table.LIB)
+    max_bearer = identity_table.integer(f"MAX_BEARER_LEN_{suffix}", identity_table.LIB)
+    if len(bearer) > max_bearer:
+        raise SystemExit(
+            f"{args.witness}: the bearer is {len(bearer)} bytes; the bearer-link-{platform} circuit "
+            f"caps it at {max_bearer} (MAX_BEARER_LEN_{suffix} in lib/identity/src/lib.nr)"
+        )
     max_id = identity_table.integer(f"MAX_ID_{suffix}")
     max_handle = identity_table.integer(f"MAX_HANDLE_{suffix}")
     id_tag = identity_table.byte_array(f"USER_ID_TAG_{suffix}")

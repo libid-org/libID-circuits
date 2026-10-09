@@ -20,8 +20,8 @@ support, which fits libID's client-side proving use case almost perfectly.
 
 | Circuit | Package | Proves |
 |---|---|---|
-| `circuits/bearer-link-x` | `bearer_link_x` | X's bearer link plus the account as keys. The identity response reveals only the anchors around `id` and `username`; the circuit opens the two committed values as X sent them, checks them against X's rules, folds the handle, and outputs `idNode = SHA256("libid.x.user-id" \|\| id)` and `handleNode = SHA256("libid.x.handle" \|\| fold(handle))`. 72 public inputs: the two bearer commitments (64 bytes), then the id and handle commitments and the two nodes as 16-byte halves. Neither value reaches the chain. |
-| `circuits/bearer-link-github` | `bearer_link_github` | The same relation for GitHub: the bearer link, and the committed `id` (a JSON integer, its digits alone) and `login` opened, checked against GitHub's rules, the login folded, and output as `SHA256("libid.github.user-id" \|\| id)` and `SHA256("libid.github.handle" \|\| fold(login))`. The same 72 public inputs. |
+| `circuits/bearer-link-x` | `bearer_link_x` | X's bearer link plus the account as keys. The identity response reveals only the anchors around `id` and `username`; the circuit opens the two committed values as X sent them, checks them against X's rules, folds the handle, and outputs `idNode = SHA256("libid.x.user-id" \|\| id)` and `handleNode = SHA256("libid.x.handle" \|\| fold(handle))`. 72 public inputs: the two bearer commitments (64 bytes), then the id and handle commitments and the two nodes as 16-byte halves. Neither value reaches the chain. The bearer is at most 128 bytes. |
+| `circuits/bearer-link-github` | `bearer_link_github` | The same relation for GitHub: the bearer link, and the committed `id` (a JSON integer, its digits alone) and `login` opened, checked against GitHub's rules, the login folded, and output as `SHA256("libid.github.user-id" \|\| id)` and `SHA256("libid.github.handle" \|\| fold(login))`. The same 72 public inputs. The bearer is at most 47 bytes; a `gho_` token is 40. |
 | `circuits/oidc-google` | `oidc_google` | Possession of a Google OIDC JWT: verifies the RSASSA-PKCS1-v1_5 signature over `header.payload` and exposes the Authorization Digest carried in `nonce`, `SHA256(aud)`, the id node `SHA256("libid.google.user-id" \|\| sub)`, the handle node `SHA256("libid.google.handle" \|\| fold(email))` (the `sub` and the address stay private; the address is checked against the Google rules and folded in the circuit), `exp`, and the modulus that verified. The Platform Verifier alone decides whether that modulus is trusted. |
 
 CI enforces `nargo fmt --check` on every package.
@@ -243,5 +243,5 @@ Verification keys under the pinned toolchain (nargo 1.0.0-rc.3, bb 6.0.0-rc.2):
 | Circuit | vk_hash |
 |---|---|
 | `bearer-link-x` | `0x1f09866b4c8feca602a2d394a5c8c924d3b8d964696f0214252ab97c9213775d` |
-| `bearer-link-github` | `0x1168344f46c63b1fa251c174f4b4d4e7c104cf65ab38d36fcbcf66108e626770` |
+| `bearer-link-github` | `0x025b9cd7d73d1a5c1661a47d45c738cf0f45197fac90ac2810182a1004eead05` |
 | `oidc-google` | `0x2b2c5f9b3301f9ba7b6d69db7baaebc124b09959b7fb7ae87734ecb56667a488` |

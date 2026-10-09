@@ -21,7 +21,7 @@
 use libid_identity::{
     BLINDER_LEN,
     identity_link,
-    MAX_BEARER_LEN,
+    MAX_BEARER_LEN_GITHUB,
     table::{
         HANDLE_RULES_GITHUB, HANDLE_TAG_GITHUB, ID_RULES_GITHUB, MAX_HANDLE_GITHUB, MAX_ID_GITHUB,
         USER_ID_TAG_GITHUB,
@@ -30,7 +30,7 @@ use libid_identity::{
 
 fn main(
     // --- Private ---
-    bearer: [u8; MAX_BEARER_LEN],
+    bearer: [u8; MAX_BEARER_LEN_GITHUB],
     bearer_len: u32,
     blinder_token: [u8; BLINDER_LEN],
     blinder_identity: [u8; BLINDER_LEN],
@@ -84,7 +84,7 @@ use libid_identity::testing::{blinder, padded};
 //   handle node = SHA256("libid.github.handle" || "octo-cat")
 
 struct Case {
-    bearer: [u8; MAX_BEARER_LEN],
+    bearer: [u8; MAX_BEARER_LEN_GITHUB],
     bearer_len: u32,
     id: [u8; MAX_ID_GITHUB],
     id_len: u32,

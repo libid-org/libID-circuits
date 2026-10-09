@@ -34,22 +34,25 @@ pub struct IdRules {
     pub leading_zero: bool,
 }
 
-/// Bearer hard cap.
+/// The bearer cap of each bearer-link circuit.
 ///
-/// REQ-PLAT-30 and REQ-PLAT-36 permit up to 4096 bytes. The circuits pin 128,
-/// which live X ceremonies produce; GitHub `gho_` tokens are 40 bytes. The
-/// bound is the bearer opening's whole cost driver, so it is set to the
-/// smallest value the platforms are known to fit.
-pub global MAX_BEARER_LEN: u32 = 128;
+/// REQ-PLAT-30 and REQ-PLAT-36 permit up to 4096 bytes. The cap is the bearer
+/// opening's whole cost driver, so each circuit sets the smallest value its
+/// platform is known to fit. GitHub's `gho_` tokens are 40 bytes, and 47 is
+/// the largest cap whose commitment preimage, bearer and blinder, fits a
+/// buffer shorter than one 64-byte SHA-256 block. X documents no length; its
+/// cap is 128, and a live X bearer is 91 bytes.
+pub global MAX_BEARER_LEN_X: u32 = 128;
+pub global MAX_BEARER_LEN_GITHUB: u32 = 47;
 
 /// Constrain an opened bearer: nonempty, printable ASCII, zero-padded tail
 /// (REQ-PLAT-30, REQ-PLAT-36, REQ-COMMON-20). `0x20`-`0x7e` excludes CR and
 /// LF, so REQ-COMMON-37 holds by construction -- the identity session sends
 /// this range inside an HTTP header.
-pub fn constrain_bearer(bearer: [u8; MAX_BEARER_LEN], bearer_len: u32) {
+pub fn constrain_bearer<let MAX: u32>(bearer: [u8; MAX], bearer_len: u32) {
     assert(bearer_len != 0, "bearer must not be empty");
-    assert(bearer_len <= MAX_BEARER_LEN, "bearer too long");
-    for i in 0..MAX_BEARER_LEN {
+    assert(bearer_len <= MAX, "bearer too long");
+    for i in 0..MAX {
         let b = bearer[i];
         if i < bearer_len {
             assert(b >= 0x20, "bearer byte below printable ASCII");
@@ -234,12 +237,12 @@ pub fn check_id<let MAX: u32>(raw: [u8; MAX], len: u32, rules: IdRules) {
 /// constrained fold: a node is a key only for the handle the platform
 /// returned. A circuit's main passes its own inputs through in order and
 /// selects the platform's tags and rules; the public inputs are main's.
-pub fn identity_link<let ID_TAG: u32, let HANDLE_TAG: u32, let MAX_ID: u32, let MAX_HANDLE: u32>(
+pub fn identity_link<let ID_TAG: u32, let HANDLE_TAG: u32, let MAX_BEARER: u32, let MAX_ID: u32, let MAX_HANDLE: u32>(
     id_tag: [u8; ID_TAG],
     handle_tag: [u8; HANDLE_TAG],
     id_rules: IdRules,
     handle_rules: HandleRules,
-    bearer: [u8; MAX_BEARER_LEN],
+    bearer: [u8; MAX_BEARER],
     bearer_len: u32,
     blinder_token: [u8; BLINDER_LEN],
     blinder_identity: [u8; BLINDER_LEN],
@@ -259,20 +262,12 @@ pub fn identity_link<let ID_TAG: u32, let HANDLE_TAG: u32, let MAX_ID: u32, let 
     // 1. The bearer link.
     constrain_bearer(bearer, bearer_len);
     assert(
-        hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(
-            bearer,
-            bearer_len,
-            blinder_token,
-        )
+        hash_commit::<MAX_BEARER, MAX_BEARER + BLINDER_LEN>(bearer, bearer_len, blinder_token)
             == token_commitment,
         "token bearer commitment mismatch",
     );
     assert(
-        hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(
-            bearer,
-            bearer_len,
-            blinder_identity,
-        )
+        hash_commit::<MAX_BEARER, MAX_BEARER + BLINDER_LEN>(bearer, bearer_len, blinder_identity)
             == identity_commitment,
         "identity bearer commitment mismatch",
     );

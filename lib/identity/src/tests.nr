@@ -3,7 +3,8 @@
 // written out in the comment), not from this library.
 
 use crate::{
-    BLINDER_LEN, check_id, constrain_bearer, hash_commit, MAX_BEARER_LEN, normalize_handle, table,
+    BLINDER_LEN, check_id, constrain_bearer, hash_commit, MAX_BEARER_LEN_GITHUB, MAX_BEARER_LEN_X,
+    normalize_handle, table,
 };
 use crate::testing::{blinder, padded};
 
@@ -11,7 +12,7 @@ use crate::testing::{blinder, padded};
 
 #[test(should_fail_with = "bearer must not be empty")]
 fn an_empty_bearer_is_refused() {
-    let bearer: [u8; MAX_BEARER_LEN] = [0; MAX_BEARER_LEN];
+    let bearer: [u8; MAX_BEARER_LEN_X] = [0; MAX_BEARER_LEN_X];
     constrain_bearer(bearer, 0);
 }
 
@@ -19,7 +20,7 @@ fn an_empty_bearer_is_refused() {
 fn a_carriage_return_is_refused() {
     // REQ-COMMON-37: the identity session sends this range inside a header,
     // so a CR would smuggle a second header line into it.
-    let mut bearer: [u8; MAX_BEARER_LEN] = [0; MAX_BEARER_LEN];
+    let mut bearer: [u8; MAX_BEARER_LEN_X] = [0; MAX_BEARER_LEN_X];
     bearer[0] = 0x61;
     bearer[1] = 0x0d;
     bearer[2] = 0x61;
@@ -28,7 +29,7 @@ fn a_carriage_return_is_refused() {
 
 #[test(should_fail_with = "bearer byte above printable ASCII")]
 fn delete_is_refused() {
-    let mut bearer: [u8; MAX_BEARER_LEN] = [0; MAX_BEARER_LEN];
+    let mut bearer: [u8; MAX_BEARER_LEN_X] = [0; MAX_BEARER_LEN_X];
     bearer[0] = 0x7f;
     constrain_bearer(bearer, 1);
 }
@@ -37,7 +38,7 @@ fn delete_is_refused() {
 fn a_dirty_tail_is_refused() {
     // The commitment hashes only `bearer_len` bytes; the zero tail makes the
     // padded witness canonical.
-    let mut bearer: [u8; MAX_BEARER_LEN] = [0; MAX_BEARER_LEN];
+    let mut bearer: [u8; MAX_BEARER_LEN_X] = [0; MAX_BEARER_LEN_X];
     bearer[0] = 0x61;
     bearer[5] = 0x62;
     constrain_bearer(bearer, 1);
@@ -45,19 +46,36 @@ fn a_dirty_tail_is_refused() {
 
 #[test(should_fail_with = "bearer too long")]
 fn a_length_past_the_buffer_is_refused() {
-    let bearer: [u8; MAX_BEARER_LEN] = [0x61; MAX_BEARER_LEN];
-    constrain_bearer(bearer, MAX_BEARER_LEN + 1);
+    let bearer: [u8; MAX_BEARER_LEN_X] = [0x61; MAX_BEARER_LEN_X];
+    constrain_bearer(bearer, MAX_BEARER_LEN_X + 1);
 }
 
 #[test]
 fn the_shortest_and_longest_bearers_are_accepted() {
-    let mut shortest: [u8; MAX_BEARER_LEN] = [0; MAX_BEARER_LEN];
+    let mut shortest: [u8; MAX_BEARER_LEN_X] = [0; MAX_BEARER_LEN_X];
     shortest[0] = 0x20; // the low edge of the permitted set
     constrain_bearer(shortest, 1);
 
     // 128 bytes, the whole buffer, at the high edge.
-    let longest: [u8; MAX_BEARER_LEN] = [0x7e; MAX_BEARER_LEN];
-    constrain_bearer(longest, MAX_BEARER_LEN);
+    let longest: [u8; MAX_BEARER_LEN_X] = [0x7e; MAX_BEARER_LEN_X];
+    constrain_bearer(longest, MAX_BEARER_LEN_X);
+}
+
+#[test]
+fn a_github_bearer_fits_its_47_byte_cap() {
+    // A `gho_` token is 40 bytes.
+    let token: [u8; MAX_BEARER_LEN_GITHUB] =
+        padded("gho_0123456789abcdefABCDEF0123456789abcd".as_bytes());
+    constrain_bearer(token, 40);
+
+    let longest: [u8; MAX_BEARER_LEN_GITHUB] = [0x7e; MAX_BEARER_LEN_GITHUB];
+    constrain_bearer(longest, 47);
+}
+
+#[test(should_fail_with = "bearer too long")]
+fn a_github_bearer_past_its_cap_is_refused() {
+    let bearer: [u8; MAX_BEARER_LEN_GITHUB] = [0x61; MAX_BEARER_LEN_GITHUB];
+    constrain_bearer(bearer, 48);
 }
 
 // --- hash_commit ------------------------------------------------------------
@@ -78,7 +96,7 @@ fn hash_commit_matches_an_independent_vector() {
 #[test]
 fn hash_commit_covers_the_shortest_and_longest_bearer() {
     // python3 -c "import hashlib; print(hashlib.sha256(b' ' + bytes(range(16))).hexdigest())"
-    let mut shortest: [u8; MAX_BEARER_LEN] = [0; MAX_BEARER_LEN];
+    let mut shortest: [u8; MAX_BEARER_LEN_X] = [0; MAX_BEARER_LEN_X];
     shortest[0] = 0x20;
     let expected_shortest: [u8; 32] = [
         0x69, 0x32, 0x2d, 0x7a, 0x78, 0x71, 0x90, 0x8c, 0xe8, 0x91, 0x2c, 0x6f, 0x96, 0xe4, 0xa4,
@@ -86,21 +104,21 @@ fn hash_commit_covers_the_shortest_and_longest_bearer() {
         0xf9, 0x48,
     ];
     assert(
-        hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(shortest, 1, blinder(0))
+        hash_commit::<MAX_BEARER_LEN_X, MAX_BEARER_LEN_X + BLINDER_LEN>(shortest, 1, blinder(0))
             == expected_shortest,
     );
 
     // python3 -c "import hashlib; print(hashlib.sha256(b'~'*128 + bytes(range(16))).hexdigest())"
-    let longest: [u8; MAX_BEARER_LEN] = [0x7e; MAX_BEARER_LEN];
+    let longest: [u8; MAX_BEARER_LEN_X] = [0x7e; MAX_BEARER_LEN_X];
     let expected_longest: [u8; 32] = [
         0xb1, 0x04, 0xc2, 0x2e, 0xdf, 0xd0, 0xe8, 0xdc, 0x11, 0x2d, 0xd4, 0x87, 0x1a, 0xd4, 0xfc,
         0xc1, 0xcb, 0x37, 0xce, 0xc7, 0x2d, 0xd6, 0xf7, 0xa6, 0xd2, 0x56, 0x65, 0xb9, 0xfb, 0xe2,
         0x81, 0x3f,
     ];
     assert(
-        hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(
+        hash_commit::<MAX_BEARER_LEN_X, MAX_BEARER_LEN_X + BLINDER_LEN>(
             longest,
-            MAX_BEARER_LEN,
+            MAX_BEARER_LEN_X,
             blinder(0),
         )
             == expected_longest,
@@ -111,15 +129,18 @@ fn hash_commit_covers_the_shortest_and_longest_bearer() {
 fn independent_blinders_give_different_commitments() {
     // The same bearer commits to two values, so nothing outside a proof links
     // the two sessions (REQ-COMMON-44).
-    let bearer: [u8; MAX_BEARER_LEN] = [0x7e; MAX_BEARER_LEN];
+    let bearer: [u8; MAX_BEARER_LEN_X] = [0x7e; MAX_BEARER_LEN_X];
     let other: [u8; BLINDER_LEN] = [0x42; BLINDER_LEN];
-    let a = hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(
+    let a = hash_commit::<MAX_BEARER_LEN_X, MAX_BEARER_LEN_X + BLINDER_LEN>(
         bearer,
-        MAX_BEARER_LEN,
+        MAX_BEARER_LEN_X,
         blinder(0),
     );
-    let b =
-        hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(bearer, MAX_BEARER_LEN, other);
+    let b = hash_commit::<MAX_BEARER_LEN_X, MAX_BEARER_LEN_X + BLINDER_LEN>(
+        bearer,
+        MAX_BEARER_LEN_X,
+        other,
+    );
     assert(a != b);
 }
 
