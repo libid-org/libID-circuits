@@ -38,11 +38,6 @@ TypeScript run too:
 scripts/regen-identity-handles.py --noir-out ../libid-circuits/lib/identity/src/table.nr
 ```
 
-`lib/identity-testing` holds the witness builders the tests share
-(`blinder`, `padded`). Nargo has no test-only dependencies, so the packages
-with tests declare it as an ordinary dependency and import it in their test
-sections only; it is not part of `lib/identity`'s API.
-
 `scripts/build.sh` copies the table into each identity circuit's artifacts as
 `handles-table.nr`, so a consumer can tell a verifier built from another
 table.

@@ -305,7 +305,7 @@ fn main(
 
 // --- Tests ----------------------------------------------------------------
 
-use libid_identity_testing::padded;
+use libid_identity::testing::padded;
 
 #[test]
 fn nonce_encoding_matches_the_published_vector() {

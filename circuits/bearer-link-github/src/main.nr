@@ -84,7 +84,7 @@ fn main(
 
 // --- Tests ----------------------------------------------------------------
 
-use libid_identity_testing::{blinder, padded};
+use libid_identity::testing::{blinder, padded};
 //
 // Every expected value comes from an independent Python computation (hashlib
 // over the bytes written out below), not from this circuit:

@@ -3,7 +3,7 @@
 // written out in the comment), not from this library.
 
 use crate::{BLINDER_LEN, check_id, constrain_bearer, hash_commit, MAX_BEARER_LEN, table};
-use libid_identity_testing::{blinder, padded};
+use crate::testing::{blinder, padded};
 
 // --- constrain_bearer -------------------------------------------------------
 

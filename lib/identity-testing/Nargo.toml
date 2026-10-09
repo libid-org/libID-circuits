@@ -1,7 +1,0 @@
-[package]
-name = "libid_identity_testing"
-type = "lib"
-authors = ["libID"]
-compiler_version = ">=1.0.0"
-
-[dependencies]

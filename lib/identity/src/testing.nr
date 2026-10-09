@@ -1,9 +1,5 @@
-// Witness builders the identity circuits' tests share.
-//
-// Nargo has no test-only dependencies, so a package that uses these declares
-// this library as an ordinary dependency and imports it in its tests alone.
-// It is kept out of libid_identity so that no circuit reaches it through the
-// library its main calls.
+// Witness builders the identity circuits' tests share. Nothing in a circuit's
+// main calls them, so they compile into no circuit.
 
 /// The `N`-byte blinder `from, from + 1, ...`.
 pub fn blinder<let N: u32>(from: u8) -> [u8; N] {
