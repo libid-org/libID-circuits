@@ -11,9 +11,7 @@ use sha256::sha256_var;
 /// Blinder width of a tlsn hash commitment.
 pub global BLINDER_LEN: u32 = 16;
 
-/// What a platform allows in a handle, as `handles.json` states it.
-/// `bytes` maps each raw byte to its fold, or to 0 where the platform
-/// refuses it.
+/// What a platform allows in a handle. `bytes` maps a raw byte to its fold, or 0 if refused.
 pub struct HandleRules {
     pub max_len: u32,
     pub allow_hyphen: bool,
@@ -21,8 +19,7 @@ pub struct HandleRules {
     pub bytes: [u8; 256],
 }
 
-/// What a platform allows in an id. `bytes` says whether each byte may
-/// appear in one.
+/// What a platform allows in an id. `bytes[b]` says whether `b` may appear.
 pub struct IdRules {
     pub max_len: u32,
     pub leading_zero: bool,

@@ -34,8 +34,7 @@ fn delete_is_refused() {
 #[test]
 fn the_bytes_past_the_bearer_change_nothing() {
     // python3 -c "import hashlib; print(hashlib.sha256(b'a' + bytes(range(16))).hexdigest())"
-    // The tail holds a CR and a byte above ASCII: neither is part of the
-    // bearer, so neither is refused, and the commitment is the 1-byte one.
+    // The tail is not the bearer: its CR and 0xff are neither refused nor hashed.
     let mut bearer: [u8; MAX_BEARER_LEN_X] = [0xff; MAX_BEARER_LEN_X];
     bearer[0] = 0x61;
     bearer[1] = 0x0d;
@@ -171,8 +170,7 @@ fn the_bytes_past_the_id_change_nothing() {
 #[test]
 fn the_bytes_past_the_handle_change_nothing() {
     // python3 -c "import hashlib; print(hashlib.sha256(b'libid.x.handle' + b'al_1').hexdigest())"
-    // A hyphen past the handle is not checked against X's rules, and the
-    // folded handle comes back zero past its length.
+    // A hyphen past the handle is not checked; the folded handle is zero there.
     let mut handle: [u8; table::MAX_HANDLE_X] = padded("Al_1".as_bytes());
     handle[4] = 0x2d;
     handle[14] = 0xff;
