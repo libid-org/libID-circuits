@@ -83,46 +83,13 @@ difference.
 
 ### Proving a real capture
 
-The script decides secrecy by content, not by file name. A witness is
-synthetic only in a session file, with the witness in its
-`identity_link_witness` member, whose `provenance` is an object with
-`"synthetic": true`, as in the two fixtures here. Every other witness is
-secret: a bare witness, with `platform` and `token_bearer` at the top level,
-which is what a real capture writes, and a session file without that marker.
-A secret witness:
-
-- holds a live bearer until the platform revokes it;
-- holds the id and handle blinders that open the commitments the notary
-  signed, so whoever holds them can link that signed record to the account
-  for as long as the record exists. Revoking the bearer does not undo that.
-
-For a secret witness the script writes only to an `--out` path ending in
-`.toml`, with no other `.` in its name, that lies outside every git work
-tree, or that the work tree's ignore rules match, with mode 0600, and never
-to stdout. A path counts as inside a work tree unless git states that it is
-in no repository and no parent directory holds a `.git` entry, so a
-repository git cannot read (dubious ownership, for one) is refused too. The
-script then prints how to prove it. Prove from outside the repo, naming both
-the input and the solved witness by absolute path, so nothing lands in
-`target/`:
-
-```sh
-dir="$(mktemp -d)"   # mode 0700, outside the repo
-scripts/identity-link-witness.py ~/capture/x-identity-link-witness.json --out "$dir/x.toml"
-scripts/build.sh     # the bb step reads artifacts/bearer-link-x/
-(umask 077 && cd circuits/bearer-link-x && nargo execute -p "$dir/x" "$dir/x")   # reads x.toml, writes x.gz
-(umask 077 && bb prove -b artifacts/bearer-link-x/bearer_link_x.json -w "$dir/x.gz" \
-  -k artifacts/bearer-link-x/vk -o "$dir/proof" -t evm)
-rm -rf "$dir"        # after using $dir/proof
-```
-
-`nargo execute` replaces the last `.` suffix of the `-p` name with `.toml`
-and of the witness name with `.gz`, so `-p x.secret` reads `x.toml`; the
-script refuses such a name. Without the witness name it writes the solved
-witness, which holds the bearer too, to
-`circuits/<circuit>/target/<package>.gz`, under the umask for a new file and
-keeping the mode of an existing one (group-readable after an ordinary build):
-delete `target/*.gz` after proving.
+A witness is synthetic only in a session file whose `provenance` has
+`"synthetic": true`, as in the two fixtures here. Every other witness, such
+as the bare one a real capture writes, is secret: it holds a live bearer and
+the blinders that link the signed record to the account. For a secret
+witness the script requires `--out`, writes it with mode 0600 and never to
+stdout. Write it outside the repo, and after proving delete it and the
+solved witness (`circuits/<circuit>/target/*.gz`).
 
 ### Consumers that must move
 
@@ -276,7 +243,7 @@ scripts/build.sh && scripts/check-verifiers.sh
 
 `circuits/oidc-google/Prover.toml` is written by
 `scripts/google-fixture-witness.py`: a Google-shaped ID token signed by a
-seeded synthetic RSA-2048 key, for the fixture `sub` 100000000000000000001 and
+synthetic RSA-2048 key, its constants in the script, for the fixture `sub` 100000000000000000001 and
 `email` Fixture@Example.com, mixed case so the fold is exercised.
 
 ## Releases

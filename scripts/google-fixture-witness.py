@@ -1,19 +1,16 @@
 #!/usr/bin/env python3
 """Write circuits/oidc-google/Prover.toml: a Google-shaped ID token signed by a
-seeded synthetic RSA-2048 key, so no real account's claims enter the repo.
+synthetic RSA-2048 key, so no real account's claims enter the repo.
 
-The key is derived from SEED below with a SHA-256 counter stream and
-Miller-Rabin, so the same seed gives the same key, token and witness on any
-machine. The token's email is mixed case on purpose: the circuit folds it, and
-the witness's handle node is the node of the folded address.
+The key is the constants N, E and D below, so the token and the witness are
+the same on any machine. The token's email is mixed case on purpose: the
+circuit folds it, and the witness's handle node is the node of the folded
+address.
 
 Everything public is computed here with hashlib, independently of the
 circuit: SHA256(aud), SHA256("libid.google.user-id" || sub),
 SHA256("libid.google.handle" || folded email). `nargo execute` refuses a
 witness the circuit disagrees with.
-
-The nonce is the Authorization Digest of libid-rs' x and github session
-fixtures (chain 31337), so the contracts' Google suite shares their digest.
 
 Usage: scripts/google-fixture-witness.py [--out circuits/oidc-google/Prover.toml]
 """
@@ -28,14 +25,15 @@ import sys
 
 sys.dont_write_bytecode = True
 import identity_table  # noqa: E402  (beside this script)
+from identity_table import toml_array  # noqa: E402
 
-SEED = b"libid oidc-google fixture key v2"
 SUB = "100000000000000000001"
 EMAIL = "Fixture@Example.com"
 AUD = "000000000000-libidfixture.apps.googleusercontent.com"
-# `authorization_digest` of libid-rs' x and github ceremony session fixtures
-# (`cargo run -p libid-tlsn --example ceremony_fixtures`, chain 31337). It is
-# restated, not read: those fixtures live in libid-rs and libID-contracts.
+# The nonce: the `authorization_digest` of libid-rs' x and github ceremony
+# session fixtures (`cargo run -p libid-tlsn --example ceremony_fixtures`,
+# chain 31337), restated here; CI's handles-table job compares it with
+# libID-contracts' copies at contracts.ref.
 DIGEST = bytes.fromhex("6beb766c7835d641b3800e8e4c03616d386251c86dcb8b640e59cec9ba42a01f")
 IAT = 1893452400
 EXP = 1893456000
@@ -56,53 +54,30 @@ HANDLE_TAG = identity_table.byte_array("HANDLE_TAG_GOOGLE")
 LIMB_BITS = 120
 
 
-class Stream:
-    """SHA-256 in counter mode over the seed: a deterministic byte source."""
-
-    def __init__(self, seed: bytes) -> None:
-        self.seed, self.counter = seed, 0
-
-    def bytes(self, n: int) -> bytes:
-        out = b""
-        while len(out) < n:
-            out += hashlib.sha256(self.seed + self.counter.to_bytes(8, "big")).digest()
-            self.counter += 1
-        return out[:n]
-
-    def below(self, bound: int) -> int:
-        size = (bound.bit_length() + 7) // 8 + 8
-        return int.from_bytes(self.bytes(size), "big") % bound
-
-
-def probably_prime(n: int, stream: Stream) -> bool:
-    if n < 2:
-        return False
-    for p in (2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37):
-        if n % p == 0:
-            return n == p
-    d, r = n - 1, 0
-    while d % 2 == 0:
-        d, r = d // 2, r + 1
-    for _ in range(40):
-        a = 2 + stream.below(n - 3)
-        x = pow(a, d, n)
-        if x in (1, n - 1):
-            continue
-        for _ in range(r - 1):
-            x = pow(x, 2, n)
-            if x == n - 1:
-                break
-        else:
-            return False
-    return True
-
-
-def prime(bits: int, stream: Stream, e: int) -> int:
-    while True:
-        candidate = int.from_bytes(stream.bytes(bits // 8), "big")
-        candidate |= (1 << (bits - 1)) | (1 << (bits - 2)) | 1
-        if (candidate - 1) % e != 0 and probably_prime(candidate, stream):
-            return candidate
+# The synthetic key. Nothing outside this file signs with it.
+N = int(
+    "ac6e236e39697f5ac592e78ea304a62e443e806438f69af826cfd2c1b8beaadf"
+    "af1fe49884224453fbbbe3af9cd90b80663c63ee708512212dceb1a0045debc0"
+    "518ad33bf87c7b9594769805fb2ca955d31372eff7a16b0bfdd7785b6d1c2d3b"
+    "57985149cb5b0dfb2fcda3a25e0cbbe7bc39d182f6fa11fd8fef5f911b109279"
+    "95a3c16c2ed25cc3476d5830b4f1486ea7dfffbe7a4c1742b9b9ff301f79cbbb"
+    "4ee80f80aab61826e34d9f6187c63807fe806339d152d0060af6f8b026393974"
+    "8d9fa66d2df3bc361e10f6ca12453bdd1750674848dcdf4760e86540a2cd4bb4"
+    "4bee0738896f853e321e5977bfb7c23b89e1514fa3c4974d1a0637fece10a53f",
+    16,
+)
+E = 65537
+D = int(
+    "37e014e121ff9ac25a65c95d825bfe51ddd1771f8309fe9bcd4fe916d77c09b9"
+    "2471ac4cf3fc7ab1d050496edddfc3875f19d0b432881ca0ddcc2de911a131c5"
+    "07677a1de3decad964dbad55bad7f523979ba4d23827799dd02b239854da1d9a"
+    "2e3f708ffe32ca6c0c4891ef0a950bcb0346a52ad047a6cec8f6a3bc4ccde8f8"
+    "aefd333bd2ba9a4802755de72ac6198039cd83421af447a8823454aaf1995311"
+    "aebbdea7563306c670e11ef17b824e871f624e9d465e3e4dc92b5e3394d0e94d"
+    "c6c2f1b8a60b51d7f821f8049647cc1faa3c7e018080e5e6693b7954dc883218"
+    "2c498317fa4b58c39d9dd60468d36f49d25358573f74554f5c95ba838bcabeb9",
+    16,
+)
 
 
 def b64url(data: bytes) -> bytes:
@@ -125,23 +100,13 @@ def hex_halves(digest: bytes) -> list[str]:
     return [f"0x{half:032x}" for half in identity_table.halves(digest)]
 
 
-def toml_list(values) -> str:
-    return "[" + ", ".join(f'"{v}"' if isinstance(v, str) else str(v) for v in values) + "]"
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     root = pathlib.Path(__file__).resolve().parent.parent
     parser.add_argument("--out", type=pathlib.Path, default=root / "circuits" / "oidc-google" / "Prover.toml")
     args = parser.parse_args()
 
-    stream, e = Stream(SEED), 65537
-    p = prime(1024, stream, e)
-    q = prime(1024, stream, e)
-    n = p * q
-    assert n.bit_length() == MOD_BITS
-    d = pow(e, -1, (p - 1) * (q - 1))
-
+    assert N.bit_length() == MOD_BITS and pow(pow(2, E, N), D, N) == 2
     nonce = b64url(DIGEST).decode()
     header = b'{"alg":"RS256","kid":"libid-fixture","typ":"JWT"}'
     payload = json.dumps(
@@ -159,7 +124,7 @@ def main() -> int:
         separators=(",", ":"),
     ).encode()
     signing_input = b64url(header) + b"." + b64url(payload)
-    signature = pkcs1_sha256(signing_input, n, d)
+    signature = pkcs1_sha256(signing_input, N, D)
 
     def at(needle: str) -> int:
         return payload.index(needle.encode())
@@ -171,10 +136,10 @@ def main() -> int:
         f"# signed by a seeded synthetic RSA-2048 key, `sub` {SUB}, `email` {EMAIL}.",
         "# scripts/check-verifiers.sh proves it and verifies the proof natively and",
         "# with the Solidity verifier.",
-        f"signing_input = {toml_list(identity_table.padded('signing_input', signing_input, SIGNING_INPUT_MAX))}",
+        f"signing_input = {toml_array(identity_table.padded('signing_input', signing_input, SIGNING_INPUT_MAX))}",
         f'signing_input_len = "{len(signing_input)}"',
         f'header_b64_len = "{len(b64url(header))}"',
-        f"payload_json = {toml_list(identity_table.padded('payload_json', payload, PAYLOAD_JSON_MAX))}",
+        f"payload_json = {toml_array(identity_table.padded('payload_json', payload, PAYLOAD_JSON_MAX))}",
         f'payload_json_len = "{len(payload)}"',
         f'email_offset = "{at(chr(34) + "email" + chr(34) + ":")}"',
         f'nonce_offset = "{at(chr(34) + "nonce" + chr(34) + ":")}"',
@@ -184,20 +149,20 @@ def main() -> int:
         f'exp_len = "{len(exp_digits)}"',
         f'iss_offset = "{at(chr(34) + "iss" + chr(34) + ":")}"',
         f'aud_offset = "{at(chr(34) + "aud" + chr(34) + ":")}"',
-        f"email_bytes = {toml_list(identity_table.padded('email_bytes', EMAIL.encode(), EMAIL_MAX))}",
+        f"email_bytes = {toml_array(identity_table.padded('email_bytes', EMAIL.encode(), EMAIL_MAX))}",
         f'email_len = "{len(EMAIL)}"',
-        f"sub_bytes = {toml_list(identity_table.padded('sub_bytes', SUB.encode(), SUB_MAX))}",
+        f"sub_bytes = {toml_array(identity_table.padded('sub_bytes', SUB.encode(), SUB_MAX))}",
         f'sub_len = "{len(SUB)}"',
-        f"audience_bytes = {toml_list(identity_table.padded('audience_bytes', AUD.encode(), AUDIENCE_MAX))}",
+        f"audience_bytes = {toml_array(identity_table.padded('audience_bytes', AUD.encode(), AUDIENCE_MAX))}",
         f'audience_len = "{len(AUD)}"',
-        f"signature = {toml_list(limbs(signature))}",
-        f"redc = {toml_list(limbs((1 << (2 * MOD_BITS + 6)) // n))}",
-        f"authorization_digest = {toml_list(list(DIGEST))}",
-        f"audience_hash = {toml_list(hex_halves(hashlib.sha256(AUD.encode()).digest()))}",
-        f"id_node = {toml_list(hex_halves(hashlib.sha256(USER_ID_TAG + SUB.encode()).digest()))}",
-        f"handle_node = {toml_list(hex_halves(hashlib.sha256(HANDLE_TAG + folded).digest()))}",
+        f"signature = {toml_array(limbs(signature))}",
+        f"redc = {toml_array(limbs((1 << (2 * MOD_BITS + 6)) // N))}",
+        f"authorization_digest = {toml_array(list(DIGEST))}",
+        f"audience_hash = {toml_array(hex_halves(hashlib.sha256(AUD.encode()).digest()))}",
+        f"id_node = {toml_array(hex_halves(hashlib.sha256(USER_ID_TAG + SUB.encode()).digest()))}",
+        f"handle_node = {toml_array(hex_halves(hashlib.sha256(HANDLE_TAG + folded).digest()))}",
         f'exp = "{EXP}"',
-        f"modulus = {toml_list(limbs(n))}",
+        f"modulus = {toml_array(limbs(N))}",
     ]
     args.out.write_text("\n".join(lines) + "\n")
     print(f"wrote {args.out}")

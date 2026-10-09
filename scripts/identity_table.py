@@ -6,7 +6,8 @@ sizes. `lib/identity/src/lib.nr` holds the bearer cap, and
 `circuits/oidc-google/src/main.nr` the JWT buffers and the RSA limb layout.
 The witness scripts read them here so no size or tag is written down twice,
 and share the encodings below: the fold, the `[high, low]` halves a circuit
-takes a 32-byte value as, and the zero-padded buffers.
+takes a 32-byte value as, the zero-padded buffers, and the TOML arrays a
+Prover.toml holds them in.
 """
 from __future__ import annotations
 
@@ -54,9 +55,6 @@ def padded(name: str, value: bytes, size: int) -> list[int]:
     return list(value) + [0] * (size - len(value))
 
 
-def package(circuit: pathlib.Path) -> str:
-    """The package name in a circuit directory's Nargo.toml."""
-    found = re.search(r'^name\s*=\s*"([^"]*)"', (circuit / "Nargo.toml").read_text(), re.MULTILINE)
-    if found is None:
-        raise SystemExit(f"{circuit}/Nargo.toml: no package name")
-    return found.group(1)
+def toml_array(values, *, quoted: bool = False) -> str:
+    """A Prover.toml array. Strings are always quoted, numbers when `quoted`."""
+    return "[" + ", ".join(f'"{v}"' if quoted or isinstance(v, str) else str(v) for v in values) + "]"
