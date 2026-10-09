@@ -1,11 +1,5 @@
-// libID bearer-link circuit for X: `libid_identity::identity_link` with X's
-// tags and rules (REQ-PLAT-32).
-//
-// The ceremony notarizes two TLS sessions: the token session
-// (`/2/oauth2/token`) and the identity session (`/2/users/me`). Each commits
-// the same OAuth bearer behind its own blinder. The identity response reveals
-// only the anchors around `id` and `username`; the two values are committed,
-// each as its own range.
+// libID bearer-link circuit for X: `identity_link` with X's tags and rules
+// (REQ-PLAT-32).
 //
 // Public inputs, in order (72 fields):
 //   0-31   token_commitment     one byte per field
@@ -14,9 +8,7 @@
 //   66-67  handle_commitment    halves
 //   68-69  id_node              halves
 //   70-71  handle_node          halves
-// The Platform Verifier writes 0-67 from the records the notary signed, never
-// from the payload. 68-71 are the nodes the payload claims and the claim
-// returns; this proof is what binds them to the committed values.
+// 0-67 come from the notary-signed records; 68-71 are the claimed nodes.
 
 use libid_identity::{
     BLINDER_LEN,
@@ -72,13 +64,9 @@ fn main(
 // --- Tests ----------------------------------------------------------------
 
 use libid_identity::testing::{blinder, padded};
-//
-// Every expected value comes from an independent Python computation (hashlib
-// over the bytes written out below), not from this circuit:
-//
-//   bearer "tok-123", blinders bytes(0..16), (16..32), (32..48), (48..64)
-//   id "2244994945", handle "Al_1" -- mixed case, as X returns handles
-//   handle node = SHA256("libid.x.handle" || "al_1")
+
+// Expected values are Python hashlib's over: bearer "tok-123", blinders
+// bytes(0..16) to (48..64), id "2244994945", handle "Al_1" (node of "al_1").
 
 struct Case {
     bearer: [u8; MAX_BEARER_LEN],

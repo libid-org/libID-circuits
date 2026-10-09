@@ -1,16 +1,7 @@
 #!/usr/bin/env python3
 """Write circuits/oidc-google/Prover.toml: a Google-shaped ID token signed by a
-synthetic RSA-2048 key, so no real account's claims enter the repo.
-
-The key is the constants N, E and D below, so the token and the witness are
-the same on any machine. The token's email is mixed case on purpose: the
-circuit folds it, and the witness's handle node is the node of the folded
-address.
-
-Everything public is computed here with hashlib, independently of the
-circuit: SHA256(aud), SHA256("libid.google.user-id" || sub),
-SHA256("libid.google.handle" || folded email). `nargo execute` refuses a
-witness the circuit disagrees with.
+fixed synthetic RSA-2048 key. The email is mixed case so the circuit folds it.
+Public inputs are computed with hashlib, independently of the circuit.
 
 Usage: scripts/google-fixture-witness.py [--out circuits/oidc-google/Prover.toml]
 """
@@ -30,10 +21,8 @@ from identity_table import toml_array  # noqa: E402
 SUB = "100000000000000000001"
 EMAIL = "Fixture@Example.com"
 AUD = "000000000000-libidfixture.apps.googleusercontent.com"
-# The nonce: the `authorization_digest` of libid-rs' x and github ceremony
-# session fixtures (`cargo run -p libid-tlsn --example ceremony_fixtures`,
-# chain 31337), restated here; CI's handles-table job compares it with
-# libID-contracts' copies at contracts.ref.
+# The nonce: libid-rs' ceremony fixtures' `authorization_digest` (chain 31337);
+# CI compares it with libID-contracts' copies.
 DIGEST = bytes.fromhex("6beb766c7835d641b3800e8e4c03616d386251c86dcb8b640e59cec9ba42a01f")
 IAT = 1893452400
 EXP = 1893456000
@@ -44,8 +33,7 @@ PAYLOAD_JSON_MAX = identity_table.integer("PAYLOAD_JSON_MAX", identity_table.OID
 AUDIENCE_MAX = identity_table.integer("AUDIENCE_MAX", identity_table.OIDC_GOOGLE)
 NUM_LIMBS = identity_table.integer("NUM_LIMBS", identity_table.OIDC_GOOGLE)
 MOD_BITS = identity_table.integer("MOD_BITS", identity_table.OIDC_GOOGLE)
-# The address and `sub` buffers and the tags are lib/identity's generated
-# Google constants.
+# lib/identity's generated Google constants.
 EMAIL_MAX = identity_table.integer("MAX_HANDLE_GOOGLE")
 SUB_MAX = identity_table.integer("MAX_ID_GOOGLE")
 USER_ID_TAG = identity_table.byte_array("USER_ID_TAG_GOOGLE")

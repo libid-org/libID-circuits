@@ -1,11 +1,5 @@
-// libID bearer-link circuit for GitHub: `libid_identity::identity_link` with
-// GitHub's tags and rules (REQ-PLAT-52). The login is the handle.
-//
-// The ceremony notarizes two TLS sessions: the token exchange
-// (`/login/oauth/access_token`) and the identity read (`/user`). Each commits
-// the same OAuth bearer behind its own blinder. The identity response reveals
-// only the anchors around `id` and `login`; the two values are committed,
-// each as its own range -- the id's digits alone, its `,` or `}` revealed.
+// libID bearer-link circuit for GitHub: `identity_link` with GitHub's tags and
+// rules (REQ-PLAT-52). The login is the handle.
 //
 // Public inputs, in order (72 fields):
 //   0-31   token_commitment     one byte per field
@@ -14,9 +8,7 @@
 //   66-67  handle_commitment    halves
 //   68-69  id_node              halves
 //   70-71  handle_node          halves
-// The Platform Verifier writes 0-67 from the records the notary signed, never
-// from the payload. 68-71 are the nodes the payload claims and the claim
-// returns; this proof is what binds them to the committed values.
+// 0-67 come from the notary-signed records; 68-71 are the claimed nodes.
 
 use libid_identity::{
     BLINDER_LEN,
@@ -75,13 +67,9 @@ fn main(
 // --- Tests ----------------------------------------------------------------
 
 use libid_identity::testing::{blinder, padded};
-//
-// Every expected value comes from an independent Python computation (hashlib
-// over the bytes written out below), not from this circuit:
-//
-//   bearer "gho_tok", blinders bytes(0..16), (16..32), (32..48), (48..64)
-//   id "583231", login "Octo-Cat" -- mixed case, as GitHub returns logins
-//   handle node = SHA256("libid.github.handle" || "octo-cat")
+
+// Expected values are Python hashlib's over: bearer "gho_tok", blinders
+// bytes(0..16) to (48..64), id "583231", login "Octo-Cat" (node of "octo-cat").
 
 struct Case {
     bearer: [u8; MAX_BEARER_LEN],

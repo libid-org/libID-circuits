@@ -1,6 +1,4 @@
-// Tests of lib.nr beside the generated vector table. Every expected hash
-// comes from an independent Python computation (hashlib over the bytes
-// written out in the comment), not from this library.
+// Tests of lib.nr. Expected hashes are Python hashlib's, not this library's.
 
 use crate::{
     BLINDER_LEN, check_id, constrain_bearer, hash_commit, MAX_BEARER_LEN, normalize_handle, table,
@@ -17,8 +15,7 @@ fn an_empty_bearer_is_refused() {
 
 #[test(should_fail_with = "bearer byte below printable ASCII")]
 fn a_carriage_return_is_refused() {
-    // REQ-COMMON-37: the identity session sends this range inside a header,
-    // so a CR would smuggle a second header line into it.
+    // REQ-COMMON-37: a CR would add a header line.
     let mut bearer: [u8; MAX_BEARER_LEN] = [0; MAX_BEARER_LEN];
     bearer[0] = 0x61;
     bearer[1] = 0x0d;
@@ -35,8 +32,7 @@ fn delete_is_refused() {
 
 #[test(should_fail_with = "bearer tail must be zero-padded")]
 fn a_dirty_tail_is_refused() {
-    // The commitment hashes only `bearer_len` bytes; the zero tail makes the
-    // padded witness canonical.
+    // The tail is not hashed, so it must be zero.
     let mut bearer: [u8; MAX_BEARER_LEN] = [0; MAX_BEARER_LEN];
     bearer[0] = 0x61;
     bearer[5] = 0x62;
@@ -109,8 +105,7 @@ fn hash_commit_covers_the_shortest_and_longest_bearer() {
 
 #[test]
 fn independent_blinders_give_different_commitments() {
-    // The same bearer commits to two values, so nothing outside a proof links
-    // the two sessions (REQ-COMMON-44).
+    // REQ-COMMON-44: nothing outside a proof links the two sessions.
     let bearer: [u8; MAX_BEARER_LEN] = [0x7e; MAX_BEARER_LEN];
     let other: [u8; BLINDER_LEN] = [0x42; BLINDER_LEN];
     let a = hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(
@@ -127,8 +122,7 @@ fn independent_blinders_give_different_commitments() {
 
 #[test(should_fail_with = "id tail must be zero-padded")]
 fn bytes_past_the_id_are_refused() {
-    // The commitment and the node hash only `len` bytes; the zero tail makes
-    // the padded witness canonical.
+    // The tail is not hashed, so it must be zero.
     let mut id: [u8; table::MAX_ID_X] = padded("2244994945".as_bytes());
     id[11] = 0x31;
     check_id(id, 10, table::ID_RULES_X);
@@ -147,8 +141,7 @@ fn bytes_past_the_handle_are_refused() {
 
 #[test]
 fn each_platform_s_buffers_are_its_rules_lengths() {
-    // table.nr states each length twice, as a buffer size and in the rules;
-    // the circuits size their inputs by the first and check by the second.
+    // Each buffer size equals its rules' max_len.
     assert(table::MAX_HANDLE_X == table::HANDLE_RULES_X.max_len);
     assert(table::MAX_ID_X == table::ID_RULES_X.max_len);
     assert(table::MAX_HANDLE_GITHUB == table::HANDLE_RULES_GITHUB.max_len);

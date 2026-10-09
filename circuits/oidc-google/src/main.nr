@@ -95,18 +95,14 @@ fn main(
     signature: [u128; NUM_LIMBS],
     redc: [u128; NUM_LIMBS],
     // ---- public inputs ----
-    // REQ-PLAT-16B's public inputs, in its order, with the id and handle
-    // nodes in place of its `userId` digest and raw `email`. The
-    // Authorization Digest binds the operation, chain and Platform Ceremony
-    // Version, so no chain id appears here.
+    // REQ-PLAT-16B's public inputs, in order, with nodes for `userId` and `email`.
+    // No chain id: the Authorization Digest binds it.
     authorization_digest: pub [u8; DIGEST_LEN],
     // Full SHA-256(client_id), packed as two big-endian 16-byte Fields.
     audience_hash: pub [Field; 2],
-    // The id node, SHA-256 of `libid.google.user-id` || `sub`, packed like
-    // the audience hash. The `sub` itself stays private.
+    // SHA-256(`libid.google.user-id` || `sub`) as halves; the `sub` stays private.
     id_node: pub [Field; 2],
-    // The handle node, SHA-256 of `libid.google.handle` || the folded
-    // address, packed the same way. The address stays private.
+    // SHA-256(`libid.google.handle` || folded address) as halves.
     handle_node: pub [Field; 2],
     exp: pub u64,
     modulus: pub [u128; NUM_LIMBS],
@@ -144,11 +140,8 @@ fn main(
             assert(payload_json[email_offset + EMAIL_PREFIX_LEN + i] == email_bytes[i]);
         }
     }
-    // The address as signed, checked against the Google rules and folded.
-    // The rules' character set has no `"`, so a prover cannot widen the value
-    // to `a@b.com","name":"x` and land the closing-quote check below on the
-    // next member's quote. They also require the tail past `email_len` zero,
-    // which the node does not hash, so the address has one padded witness.
+    // Check the address against Google's rules and fold it. The rules allow
+    // no `"`, so the value cannot run past its closing quote.
     let folded = normalize_handle(email_bytes, email_len, HANDLE_RULES_GOOGLE);
     assert(payload_json[email_offset + EMAIL_PREFIX_LEN + email_len] == 34); // closing `"`
     assert_structural(
@@ -190,10 +183,8 @@ fn main(
             assert(payload_json[sub_offset + SUB_PREFIX_LEN + i] == sub_bytes[i]);
         }
     }
-    // REQ-PLAT-04: printable ASCII without `"` or `\`, nonempty, at most 31
-    // bytes. The tail past `sub_len`, which the node does not hash, must be
-    // zero, so the `sub` has one padded witness. Only the node leaves the
-    // circuit, so no later role can check these bytes.
+    // REQ-PLAT-04: 1-31 bytes of printable ASCII without `"` or `\`, zero tail.
+    // Only the node leaves the circuit, so no later role can check these bytes.
     check_id(sub_bytes, sub_len, ID_RULES_GOOGLE);
     assert(payload_json[sub_offset + SUB_PREFIX_LEN + sub_len] == 34); // closing `"`
     assert_structural(payload_json[sub_offset + SUB_PREFIX_LEN + sub_len + 1]);
@@ -387,9 +378,7 @@ fn nonce_encoding_matches_external_vectors() {
     }
 }
 
-// The vectors below are Python `hashlib.sha256` of the tag and the `sub`, as
-// halves, so they check the circuit's id node against an oracle outside the
-// Noir ecosystem.
+// Expected halves are Python hashlib's over the tag and the `sub`.
 #[test]
 fn the_id_node_matches_an_independent_vector() {
     // hashlib.sha256(b"libid.google.user-id" + b"123456789012345678901")
@@ -411,11 +400,7 @@ fn the_id_node_covers_the_shortest_and_longest_sub() {
     assert(got == [0x8f656d800bef67cbaa34852bb16202c6, 0x4189a0ab5ae94d9ecc9d82c830989dcf]);
 }
 
-// The `sub`'s byte rules are lib/identity's `check_id` under
-// `ID_RULES_GOOGLE`, and the address's are `normalize_handle` under
-// `HANDLE_RULES_GOOGLE`. The table's Google vectors cover `"` and `\` in
-// each, a tab in a `sub`, and the fold; these cover the bytes past `~` and
-// every printable byte.
+// `check_id` under ID_RULES_GOOGLE; the table's vectors cover `"`, `\` and tab.
 
 fn sub_with(byte: u8) -> [u8; SUB_MAX] {
     let mut sub: [u8; SUB_MAX] = padded("1".as_bytes());

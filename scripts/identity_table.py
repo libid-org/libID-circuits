@@ -1,14 +1,5 @@
-"""The circuits' constants, read from the Noir sources that define them.
-
-`lib/identity/src/table.nr` is generated from libID-contracts'
-`solidity/contracts/handles/handles.json`: the platform tags and the buffer
-sizes. `lib/identity/src/lib.nr` holds the bearer cap, and
-`circuits/oidc-google/src/main.nr` the JWT buffers and the RSA limb layout.
-The witness scripts read them here so no size or tag is written down twice,
-and share the encodings below: the fold, the `[high, low]` halves a circuit
-takes a 32-byte value as, the zero-padded buffers, and the TOML arrays a
-Prover.toml holds them in.
-"""
+"""The circuits' constants, read from the Noir sources that define them, and
+the encodings the witness scripts share."""
 from __future__ import annotations
 
 import pathlib
