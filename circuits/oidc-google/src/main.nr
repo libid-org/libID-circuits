@@ -411,7 +411,10 @@ fn the_id_node_covers_the_shortest_and_longest_sub() {
 }
 
 // The `sub`'s byte rules are lib/identity's `check_id` under
-// `ID_RULES_GOOGLE`: printable ASCII without `"` or `\`.
+// `ID_RULES_GOOGLE`, and the address's are `normalize_handle` under
+// `HANDLE_RULES_GOOGLE`. The table's Google vectors cover `"` and `\` in
+// each, a tab in a `sub`, and the fold; these cover the bytes past `~` and
+// every printable byte.
 
 fn sub_with(byte: u8) -> [u8; SUB_MAX] {
     let mut sub: [u8; SUB_MAX] = padded("1".as_bytes());
@@ -430,11 +433,6 @@ fn every_printable_sub_byte_but_quote_and_backslash_is_accepted() {
 }
 
 #[test(should_fail_with = "id byte not allowed")]
-fn a_control_byte_in_sub_is_refused() {
-    check_id(sub_with(0x1f), 2, ID_RULES_GOOGLE);
-}
-
-#[test(should_fail_with = "id byte not allowed")]
 fn delete_in_sub_is_refused() {
     check_id(sub_with(0x7f), 2, ID_RULES_GOOGLE);
 }
@@ -442,48 +440,6 @@ fn delete_in_sub_is_refused() {
 #[test(should_fail_with = "id byte not allowed")]
 fn a_non_ascii_byte_in_sub_is_refused() {
     check_id(sub_with(0x80), 2, ID_RULES_GOOGLE);
-}
-
-#[test(should_fail_with = "id byte not allowed")]
-fn a_quote_in_sub_is_refused() {
-    check_id(sub_with(0x22), 2, ID_RULES_GOOGLE);
-}
-
-#[test(should_fail_with = "id byte not allowed")]
-fn a_backslash_in_sub_is_refused() {
-    check_id(sub_with(0x5c), 2, ID_RULES_GOOGLE);
-}
-
-#[test(should_fail_with = "id tail must be zero-padded")]
-fn bytes_past_the_sub_are_refused() {
-    // Only `sub_len` bytes are hashed into the id node; the tail is pinned.
-    check_id(sub_with(0x31), 1, ID_RULES_GOOGLE);
-}
-
-// The address's rules are lib/identity's `normalize_handle` under
-// `HANDLE_RULES_GOOGLE`; the table's refused Google vectors cover `"` and `\`
-// in a handle and in a `sub` (handles.json, regenerated into table.nr).
-
-#[test]
-fn the_fixture_address_folds() {
-    let email: [u8; EMAIL_MAX] = padded("Fixture@Example.com".as_bytes());
-    let folded = normalize_handle(email, 19, HANDLE_RULES_GOOGLE);
-    let expected: [u8; EMAIL_MAX] = padded("fixture@example.com".as_bytes());
-    assert(folded == expected);
-}
-
-#[test(should_fail_with = "handle byte not allowed")]
-fn a_quote_in_the_address_is_refused() {
-    // A `"` would end the `email` claim's string early in the signed JSON.
-    let email: [u8; EMAIL_MAX] = padded("a\"b@example.com".as_bytes());
-    let _ = normalize_handle(email, 15, HANDLE_RULES_GOOGLE);
-}
-
-#[test(should_fail_with = "handle tail must be zero-padded")]
-fn bytes_past_the_address_are_refused() {
-    let mut email: [u8; EMAIL_MAX] = padded("a@example.com".as_bytes());
-    email[14] = 0x61;
-    let _ = normalize_handle(email, 13, HANDLE_RULES_GOOGLE);
 }
 
 #[test]

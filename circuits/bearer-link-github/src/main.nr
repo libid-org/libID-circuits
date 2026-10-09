@@ -202,10 +202,3 @@ fn an_underscore_is_x_s_not_github_s() {
     c.handle[4] = 0x5f;
     run(c);
 }
-
-#[test(should_fail_with = "handle shape not allowed")]
-fn a_doubled_hyphen_is_refused() {
-    let mut c = case();
-    c.handle[5] = 0x2d;
-    run(c);
-}

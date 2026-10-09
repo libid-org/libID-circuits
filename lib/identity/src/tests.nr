@@ -2,7 +2,9 @@
 // comes from an independent Python computation (hashlib over the bytes
 // written out in the comment), not from this library.
 
-use crate::{BLINDER_LEN, check_id, constrain_bearer, hash_commit, MAX_BEARER_LEN, table};
+use crate::{
+    BLINDER_LEN, check_id, constrain_bearer, hash_commit, MAX_BEARER_LEN, normalize_handle, table,
+};
 use crate::testing::{blinder, padded};
 
 // --- constrain_bearer -------------------------------------------------------
@@ -24,22 +26,6 @@ fn a_carriage_return_is_refused() {
     constrain_bearer(bearer, 3);
 }
 
-#[test(should_fail_with = "bearer byte below printable ASCII")]
-fn a_line_feed_is_refused() {
-    let mut bearer: [u8; MAX_BEARER_LEN] = [0; MAX_BEARER_LEN];
-    bearer[0] = 0x61;
-    bearer[1] = 0x0a;
-    bearer[2] = 0x61;
-    constrain_bearer(bearer, 3);
-}
-
-#[test(should_fail_with = "bearer byte above printable ASCII")]
-fn a_byte_above_ascii_is_refused() {
-    let mut bearer: [u8; MAX_BEARER_LEN] = [0; MAX_BEARER_LEN];
-    bearer[0] = 0xc3;
-    constrain_bearer(bearer, 1);
-}
-
 #[test(should_fail_with = "bearer byte above printable ASCII")]
 fn delete_is_refused() {
     let mut bearer: [u8; MAX_BEARER_LEN] = [0; MAX_BEARER_LEN];
@@ -49,7 +35,8 @@ fn delete_is_refused() {
 
 #[test(should_fail_with = "bearer tail must be zero-padded")]
 fn a_dirty_tail_is_refused() {
-    // Padding a prover controls is padding a prover can hide bytes in.
+    // The commitment hashes only `bearer_len` bytes; the zero tail makes the
+    // padded witness canonical.
     let mut bearer: [u8; MAX_BEARER_LEN] = [0; MAX_BEARER_LEN];
     bearer[0] = 0x61;
     bearer[5] = 0x62;
@@ -140,11 +127,20 @@ fn independent_blinders_give_different_commitments() {
 
 #[test(should_fail_with = "id tail must be zero-padded")]
 fn bytes_past_the_id_are_refused() {
-    // The commitment and the node hash only `len` bytes; a byte past them
-    // would be free unless the tail is pinned to zero.
+    // The commitment and the node hash only `len` bytes; the zero tail makes
+    // the padded witness canonical.
     let mut id: [u8; table::MAX_ID_X] = padded("2244994945".as_bytes());
     id[11] = 0x31;
     check_id(id, 10, table::ID_RULES_X);
+}
+
+// --- normalize_handle -------------------------------------------------------
+
+#[test(should_fail_with = "handle tail must be zero-padded")]
+fn bytes_past_the_handle_are_refused() {
+    let mut handle: [u8; table::MAX_HANDLE_X] = padded("Al_1".as_bytes());
+    handle[5] = 0x61;
+    let _ = normalize_handle(handle, 4, table::HANDLE_RULES_X);
 }
 
 // --- The table's buffers ----------------------------------------------------

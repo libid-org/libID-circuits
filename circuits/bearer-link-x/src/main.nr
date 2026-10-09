@@ -219,10 +219,3 @@ fn a_handle_outside_x_s_rules_is_refused_before_any_hash() {
     c.handle[2] = 0x2d;
     run(c);
 }
-
-#[test(should_fail_with = "handle tail must be zero-padded")]
-fn bytes_past_the_handle_are_refused() {
-    let mut c = case();
-    c.handle[5] = 0x61;
-    run(c);
-}
