@@ -4,7 +4,7 @@
 
 use crate::{
     BLINDER_LEN, check_id, constrain_bearer, hash_commit, MAX_BEARER_LEN_GITHUB, MAX_BEARER_LEN_X,
-    normalize_handle, table,
+    node_halves, normalize_handle, table,
 };
 use crate::testing::{blinder, padded};
 
@@ -34,14 +34,24 @@ fn delete_is_refused() {
     constrain_bearer(bearer, 1);
 }
 
-#[test(should_fail_with = "bearer tail must be zero-padded")]
-fn a_dirty_tail_is_refused() {
-    // The commitment hashes only `bearer_len` bytes; the zero tail makes the
-    // padded witness canonical.
-    let mut bearer: [u8; MAX_BEARER_LEN_X] = [0; MAX_BEARER_LEN_X];
+#[test]
+fn the_bytes_past_the_bearer_change_nothing() {
+    // python3 -c "import hashlib; print(hashlib.sha256(b'a' + bytes(range(16))).hexdigest())"
+    // The tail holds a CR and a byte above ASCII: neither is part of the
+    // bearer, so neither is refused, and the commitment is the 1-byte one.
+    let mut bearer: [u8; MAX_BEARER_LEN_X] = [0xff; MAX_BEARER_LEN_X];
     bearer[0] = 0x61;
-    bearer[5] = 0x62;
+    bearer[1] = 0x0d;
     constrain_bearer(bearer, 1);
+    let expected: [u8; 32] = [
+        0xa6, 0x7c, 0x72, 0x8b, 0x8e, 0x81, 0xd6, 0x43, 0xdb, 0x8f, 0x83, 0x5a, 0x69, 0xc2, 0x85,
+        0xc4, 0x39, 0x22, 0x4e, 0x93, 0x7b, 0x37, 0xd3, 0x20, 0x08, 0xf5, 0x76, 0x9b, 0x4f, 0x1a,
+        0xac, 0x66,
+    ];
+    assert(
+        hash_commit::<MAX_BEARER_LEN_X, MAX_BEARER_LEN_X + BLINDER_LEN>(bearer, 1, blinder(0))
+            == expected,
+    );
 }
 
 #[test(should_fail_with = "bearer too long")]
@@ -146,22 +156,37 @@ fn independent_blinders_give_different_commitments() {
 
 // --- check_id ---------------------------------------------------------------
 
-#[test(should_fail_with = "id tail must be zero-padded")]
-fn bytes_past_the_id_are_refused() {
-    // The commitment and the node hash only `len` bytes; the zero tail makes
-    // the padded witness canonical.
+#[test]
+fn the_bytes_past_the_id_change_nothing() {
+    // A letter past the id is not checked, and the node is still
+    // SHA256("libid.x.user-id" || "2244994945"), handles.json's vector.
     let mut id: [u8; table::MAX_ID_X] = padded("2244994945".as_bytes());
-    id[11] = 0x31;
+    id[10] = 0x61;
+    id[19] = 0xff;
     check_id(id, 10, table::ID_RULES_X);
+    assert(
+        node_halves(table::USER_ID_TAG_X, id, 10)
+            == [0x68291869976ffad2abf3e933ec9ab262, 0x3395ff8b3b9242e655e1da3ef43d4f94],
+    );
 }
 
 // --- normalize_handle -------------------------------------------------------
 
-#[test(should_fail_with = "handle tail must be zero-padded")]
-fn bytes_past_the_handle_are_refused() {
+#[test]
+fn the_bytes_past_the_handle_change_nothing() {
+    // python3 -c "import hashlib; print(hashlib.sha256(b'libid.x.handle' + b'al_1').hexdigest())"
+    // A hyphen past the handle is not checked against X's rules, and the
+    // folded handle comes back zero past its length.
     let mut handle: [u8; table::MAX_HANDLE_X] = padded("Al_1".as_bytes());
-    handle[5] = 0x61;
-    let _ = normalize_handle(handle, 4, table::HANDLE_RULES_X);
+    handle[4] = 0x2d;
+    handle[14] = 0xff;
+    let out = normalize_handle(handle, 4, table::HANDLE_RULES_X);
+    let expected: [u8; table::MAX_HANDLE_X] = padded("al_1".as_bytes());
+    assert(out == expected);
+    assert(
+        node_halves(table::HANDLE_TAG_X, out, 4)
+            == [0x7fd25f75b7b97e348f2fadca95dde204, 0x897ae05f053c911eff907d6931108b90],
+    );
 }
 
 // --- The table's buffers ----------------------------------------------------

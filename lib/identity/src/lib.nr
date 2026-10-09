@@ -47,10 +47,11 @@ pub struct IdRules {
 pub global MAX_BEARER_LEN_X: u32 = 128;
 pub global MAX_BEARER_LEN_GITHUB: u32 = 47;
 
-/// Constrain an opened bearer: nonempty, printable ASCII, zero-padded tail
-/// (REQ-PLAT-30, REQ-PLAT-36, REQ-COMMON-20). `0x20`-`0x7e` excludes CR and
-/// LF, so REQ-COMMON-37 holds by construction -- the identity session sends
-/// this range inside an HTTP header.
+/// Constrain an opened bearer: nonempty, printable ASCII (REQ-PLAT-30,
+/// REQ-PLAT-36, REQ-COMMON-20). `0x20`-`0x7e` excludes CR and LF, so
+/// REQ-COMMON-37 holds by construction -- the identity session sends this
+/// range inside an HTTP header. The bytes past `bearer_len` are no part of
+/// the bearer and are not read.
 pub fn constrain_bearer<let MAX: u32>(bearer: [u8; MAX], bearer_len: u32) {
     assert(bearer_len != 0, "bearer must not be empty");
     assert(bearer_len <= MAX, "bearer too long");
@@ -59,8 +60,6 @@ pub fn constrain_bearer<let MAX: u32>(bearer: [u8; MAX], bearer_len: u32) {
         if i < bearer_len {
             assert(b >= 0x20, "bearer byte below printable ASCII");
             assert(b <= 0x7e, "bearer byte above printable ASCII");
-        } else {
-            assert(b == 0, "bearer tail must be zero-padded");
         }
     }
 }
@@ -68,8 +67,8 @@ pub fn constrain_bearer<let MAX: u32>(bearer: [u8; MAX], bearer_len: u32) {
 /// A tlsn hash commitment, `SHA256(plaintext[0..plaintext_len] || blinder)`.
 ///
 /// `TOTAL` is the caller's `MAX_PLAIN + BLINDER_LEN`; Noir array types cannot
-/// express the sum. The bytes past `plaintext_len` are not hashed; every
-/// caller here requires them zero, so a value has one padded witness.
+/// express the sum. The bytes past `plaintext_len` are not hashed, so they do
+/// not change the commitment.
 pub fn hash_commit<let MAX_PLAIN: u32, let TOTAL: u32>(
     plaintext_padded: [u8; MAX_PLAIN],
     plaintext_len: u32,
@@ -80,9 +79,7 @@ pub fn hash_commit<let MAX_PLAIN: u32, let TOTAL: u32>(
 
     let mut input: [u8; TOTAL] = [0; TOTAL];
     for i in 0..MAX_PLAIN {
-        if i < plaintext_len {
-            input[i] = plaintext_padded[i];
-        }
+        input[i] = plaintext_padded[i];
     }
     for i in 0..BLINDER_LEN {
         input[plaintext_len + i] = blinder[i];
@@ -92,9 +89,8 @@ pub fn hash_commit<let MAX_PLAIN: u32, let TOTAL: u32>(
 
 /// `SHA256(tag || value[0..len])`, the node of a checked value.
 ///
-/// `TOTAL` is `TAG + MAX`. The value's tail is not hashed, so it does not
-/// change the node; the checks below require it zero so that a value has one
-/// padded witness.
+/// `TOTAL` is `TAG + MAX`. `sha256_var` reads only the first `TAG + len`
+/// bytes, so the value's tail does not change the node.
 pub fn tagged_hash<let TAG: u32, let MAX: u32, let TOTAL: u32>(
     tag: [u8; TAG],
     value: [u8; MAX],
@@ -142,7 +138,8 @@ pub fn node_halves<let TAG: u32, let MAX: u32>(
 /// Refuses, never repairs: no byte is trimmed and no `@` is stripped, so a
 /// value that is not already a handle has no node. The checks run in the
 /// order every language runs them -- empty, too long, each byte, shape -- so
-/// a refused vector is refused for the same reason everywhere.
+/// a refused vector is refused for the same reason everywhere. The returned
+/// handle is zero past `len`, whatever `raw` holds there.
 pub fn normalize_handle<let MAX: u32>(raw: [u8; MAX], len: u32, rules: HandleRules) -> [u8; MAX] {
     assert(len != 0, "handle is empty");
     assert((len <= MAX) & (len <= rules.max_len), "handle too long");
@@ -167,8 +164,6 @@ pub fn normalize_handle<let MAX: u32>(raw: [u8; MAX], len: u32, rules: HandleRul
                 doubled = true;
             }
             previous_hyphen = hyphen;
-        } else {
-            assert(b == 0, "handle tail must be zero-padded");
         }
     }
 
@@ -188,8 +183,6 @@ pub fn check_id<let MAX: u32>(raw: [u8; MAX], len: u32, rules: IdRules) {
         let b = raw[i];
         if i < len {
             assert(rules.bytes[b as u32], "id byte not allowed");
-        } else {
-            assert(b == 0, "id tail must be zero-padded");
         }
     }
     if !rules.leading_zero {
@@ -204,9 +197,9 @@ pub fn check_id<let MAX: u32>(raw: [u8; MAX], len: u32, rules: IdRules) {
 ///      and the identity session's;
 ///   2. the RAW id and the RAW handle open their commitments -- the bytes the
 ///      platform sent, before any transform;
-///   3. the raw id meets `id_rules` and the raw handle meets `handle_rules`;
-///      both checks also require a zero tail, so each value has one padded
-///      witness (the hashes read only the first `len` bytes);
+///   3. the raw id meets `id_rules` and the raw handle meets `handle_rules`
+///      (the hashes read only the first `len` bytes of each, so the bytes
+///      past it are not checked);
 ///   4. id_node     = SHA256(id_tag     || raw id)
 ///      handle_node = SHA256(handle_tag || fold(raw handle)),
 ///      the fold applied byte by byte to the same witness that opened (2).
