@@ -11,37 +11,36 @@ use sha256::sha256_var;
 /// Blinder width of a tlsn hash commitment.
 pub global BLINDER_LEN: u32 = 16;
 
-/// What a platform allows in a handle, as `handles.json` states it.
+/// What a platform allows in a handle. `bytes` maps a raw byte to its fold, or 0 if refused.
 pub struct HandleRules {
     pub max_len: u32,
-    pub allow_underscore: bool,
     pub allow_hyphen: bool,
     pub is_email: bool,
+    pub bytes: [u8; 256],
 }
 
-/// What a platform allows in an id. `decimal` ids are ASCII digits;
-/// otherwise printable ASCII without `"` or `\`.
+/// What a platform allows in an id. `bytes[b]` says whether `b` may appear.
 pub struct IdRules {
     pub max_len: u32,
-    pub decimal: bool,
     pub leading_zero: bool,
+    pub bytes: [bool; 256],
 }
 
-/// Bearer cap; REQ-PLAT-30/36 allow 4096, but the cap drives the opening's cost.
-pub global MAX_BEARER_LEN: u32 = 128;
+/// Each circuit's bearer cap, the opening's main cost (REQ-PLAT-30/36 allow 4096).
+/// GitHub's 47 keeps bearer-link-github under 2^16; a live X bearer measured 91 bytes.
+pub global MAX_BEARER_LEN_X: u32 = 128;
+pub global MAX_BEARER_LEN_GITHUB: u32 = 47;
 
-/// An opened bearer: nonempty, printable ASCII, zero tail (REQ-PLAT-30,
-/// REQ-PLAT-36, REQ-COMMON-20). No CR or LF, so REQ-COMMON-37 holds.
-pub fn constrain_bearer(bearer: [u8; MAX_BEARER_LEN], bearer_len: u32) {
+/// An opened bearer: nonempty, printable ASCII (REQ-PLAT-30, REQ-PLAT-36,
+/// REQ-COMMON-20). No CR or LF, so REQ-COMMON-37 holds. The tail is not read.
+pub fn constrain_bearer<let MAX: u32>(bearer: [u8; MAX], bearer_len: u32) {
     assert(bearer_len != 0, "bearer must not be empty");
-    assert(bearer_len <= MAX_BEARER_LEN, "bearer too long");
-    for i in 0..MAX_BEARER_LEN {
+    assert(bearer_len <= MAX, "bearer too long");
+    for i in 0..MAX {
         let b = bearer[i];
         if i < bearer_len {
             assert(b >= 0x20, "bearer byte below printable ASCII");
             assert(b <= 0x7e, "bearer byte above printable ASCII");
-        } else {
-            assert(b == 0, "bearer tail must be zero-padded");
         }
     }
 }
@@ -58,9 +57,7 @@ pub fn hash_commit<let MAX_PLAIN: u32, let TOTAL: u32>(
 
     let mut input: [u8; TOTAL] = [0; TOTAL];
     for i in 0..MAX_PLAIN {
-        if i < plaintext_len {
-            input[i] = plaintext_padded[i];
-        }
+        input[i] = plaintext_padded[i];
     }
     for i in 0..BLINDER_LEN {
         input[plaintext_len + i] = blinder[i];
@@ -106,27 +103,9 @@ pub fn node_halves<let TAG: u32, let MAX: u32>(
     halves(tagged_hash::<TAG, MAX, TAG + MAX>(tag, value, len))
 }
 
-/// A-Z down to a-z; every other byte unchanged.
-pub fn fold(b: u8) -> u8 {
-    if (b >= 0x41) & (b <= 0x5a) {
-        b + 0x20
-    } else {
-        b
-    }
-}
-
-fn handle_byte_allowed(c: u8, rules: HandleRules) -> bool {
-    let lower = (c >= 0x61) & (c <= 0x7a);
-    let digit = (c >= 0x30) & (c <= 0x39);
-    let email =
-        rules.is_email & ((c == 0x2e) | (c == 0x2b) | (c == 0x2d) | (c == 0x5f) | (c == 0x40));
-    let underscore = rules.allow_underscore & (c == 0x5f);
-    let hyphen = rules.allow_hyphen & (c == 0x2d);
-    lower | digit | email | underscore | hyphen
-}
-
-/// Check a handle as the platform sent it and return it folded. Refuses, never
-/// repairs. Checks run in every language's order: empty, too long, byte, shape.
+/// Check a handle as the platform sent it and return it folded, zero past `len`.
+/// Refuses, never repairs; checks run in every language's order: empty, too
+/// long, byte, shape.
 pub fn normalize_handle<let MAX: u32>(raw: [u8; MAX], len: u32, rules: HandleRules) -> [u8; MAX] {
     assert(len != 0, "handle is empty");
     assert((len <= MAX) & (len <= rules.max_len), "handle too long");
@@ -139,8 +118,8 @@ pub fn normalize_handle<let MAX: u32>(raw: [u8; MAX], len: u32, rules: HandleRul
     for i in 0..MAX {
         let b = raw[i];
         if i < len {
-            let c = fold(b);
-            assert(handle_byte_allowed(c, rules), "handle byte not allowed");
+            let c = rules.bytes[b as u32];
+            assert(c != 0, "handle byte not allowed");
             out[i] = c;
             if c == 0x40 {
                 ats += 1;
@@ -151,8 +130,6 @@ pub fn normalize_handle<let MAX: u32>(raw: [u8; MAX], len: u32, rules: HandleRul
                 doubled = true;
             }
             previous_hyphen = hyphen;
-        } else {
-            assert(b == 0, "handle tail must be zero-padded");
         }
     }
 
@@ -171,14 +148,7 @@ pub fn check_id<let MAX: u32>(raw: [u8; MAX], len: u32, rules: IdRules) {
     for i in 0..MAX {
         let b = raw[i];
         if i < len {
-            let ok = if rules.decimal {
-                (b >= 0x30) & (b <= 0x39)
-            } else {
-                (b >= 0x20) & (b <= 0x7e) & (b != 0x22) & (b != 0x5c)
-            };
-            assert(ok, "id byte not allowed");
-        } else {
-            assert(b == 0, "id tail must be zero-padded");
+            assert(rules.bytes[b as u32], "id byte not allowed");
         }
     }
     if !rules.leading_zero {
@@ -189,12 +159,12 @@ pub fn check_id<let MAX: u32>(raw: [u8; MAX], len: u32, rules: IdRules) {
 /// The bearer-link relation: one bearer opens both bearer commitments, the raw
 /// id and handle open theirs and meet the rules, and the nodes are
 /// SHA256(id_tag || id) and SHA256(handle_tag || fold(handle)).
-pub fn identity_link<let ID_TAG: u32, let HANDLE_TAG: u32, let MAX_ID: u32, let MAX_HANDLE: u32>(
+pub fn identity_link<let ID_TAG: u32, let HANDLE_TAG: u32, let MAX_BEARER: u32, let MAX_ID: u32, let MAX_HANDLE: u32>(
     id_tag: [u8; ID_TAG],
     handle_tag: [u8; HANDLE_TAG],
     id_rules: IdRules,
     handle_rules: HandleRules,
-    bearer: [u8; MAX_BEARER_LEN],
+    bearer: [u8; MAX_BEARER],
     bearer_len: u32,
     blinder_token: [u8; BLINDER_LEN],
     blinder_identity: [u8; BLINDER_LEN],
@@ -204,8 +174,8 @@ pub fn identity_link<let ID_TAG: u32, let HANDLE_TAG: u32, let MAX_ID: u32, let 
     handle: [u8; MAX_HANDLE],
     handle_len: u32,
     blinder_handle: [u8; BLINDER_LEN],
-    token_commitment: [u8; 32],
-    identity_commitment: [u8; 32],
+    token_commitment: [Field; 2],
+    identity_commitment: [Field; 2],
     id_commitment: [Field; 2],
     handle_commitment: [Field; 2],
     id_node: [Field; 2],
@@ -214,20 +184,20 @@ pub fn identity_link<let ID_TAG: u32, let HANDLE_TAG: u32, let MAX_ID: u32, let 
     // 1. The bearer link.
     constrain_bearer(bearer, bearer_len);
     assert(
-        hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(
+        halves(hash_commit::<MAX_BEARER, MAX_BEARER + BLINDER_LEN>(
             bearer,
             bearer_len,
             blinder_token,
-        )
+        ))
             == token_commitment,
         "token bearer commitment mismatch",
     );
     assert(
-        hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(
+        halves(hash_commit::<MAX_BEARER, MAX_BEARER + BLINDER_LEN>(
             bearer,
             bearer_len,
             blinder_identity,
-        )
+        ))
             == identity_commitment,
         "identity bearer commitment mismatch",
     );

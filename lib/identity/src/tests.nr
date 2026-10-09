@@ -1,7 +1,8 @@
 // Tests of lib.nr. Expected hashes are Python hashlib's, not this library's.
 
 use crate::{
-    BLINDER_LEN, check_id, constrain_bearer, hash_commit, MAX_BEARER_LEN, normalize_handle, table,
+    BLINDER_LEN, check_id, constrain_bearer, hash_commit, MAX_BEARER_LEN_GITHUB, MAX_BEARER_LEN_X,
+    node_halves, normalize_handle, table,
 };
 use crate::testing::{blinder, padded};
 
@@ -9,14 +10,14 @@ use crate::testing::{blinder, padded};
 
 #[test(should_fail_with = "bearer must not be empty")]
 fn an_empty_bearer_is_refused() {
-    let bearer: [u8; MAX_BEARER_LEN] = [0; MAX_BEARER_LEN];
+    let bearer: [u8; MAX_BEARER_LEN_X] = [0; MAX_BEARER_LEN_X];
     constrain_bearer(bearer, 0);
 }
 
 #[test(should_fail_with = "bearer byte below printable ASCII")]
 fn a_carriage_return_is_refused() {
     // REQ-COMMON-37: a CR would add a header line.
-    let mut bearer: [u8; MAX_BEARER_LEN] = [0; MAX_BEARER_LEN];
+    let mut bearer: [u8; MAX_BEARER_LEN_X] = [0; MAX_BEARER_LEN_X];
     bearer[0] = 0x61;
     bearer[1] = 0x0d;
     bearer[2] = 0x61;
@@ -25,35 +26,62 @@ fn a_carriage_return_is_refused() {
 
 #[test(should_fail_with = "bearer byte above printable ASCII")]
 fn delete_is_refused() {
-    let mut bearer: [u8; MAX_BEARER_LEN] = [0; MAX_BEARER_LEN];
+    let mut bearer: [u8; MAX_BEARER_LEN_X] = [0; MAX_BEARER_LEN_X];
     bearer[0] = 0x7f;
     constrain_bearer(bearer, 1);
 }
 
-#[test(should_fail_with = "bearer tail must be zero-padded")]
-fn a_dirty_tail_is_refused() {
-    // The tail is not hashed, so it must be zero.
-    let mut bearer: [u8; MAX_BEARER_LEN] = [0; MAX_BEARER_LEN];
+#[test]
+fn the_bytes_past_the_bearer_change_nothing() {
+    // python3 -c "import hashlib; print(hashlib.sha256(b'a' + bytes(range(16))).hexdigest())"
+    // The tail is not the bearer: its CR and 0xff are neither refused nor hashed.
+    let mut bearer: [u8; MAX_BEARER_LEN_X] = [0xff; MAX_BEARER_LEN_X];
     bearer[0] = 0x61;
-    bearer[5] = 0x62;
+    bearer[1] = 0x0d;
     constrain_bearer(bearer, 1);
+    let expected: [u8; 32] = [
+        0xa6, 0x7c, 0x72, 0x8b, 0x8e, 0x81, 0xd6, 0x43, 0xdb, 0x8f, 0x83, 0x5a, 0x69, 0xc2, 0x85,
+        0xc4, 0x39, 0x22, 0x4e, 0x93, 0x7b, 0x37, 0xd3, 0x20, 0x08, 0xf5, 0x76, 0x9b, 0x4f, 0x1a,
+        0xac, 0x66,
+    ];
+    assert(
+        hash_commit::<MAX_BEARER_LEN_X, MAX_BEARER_LEN_X + BLINDER_LEN>(bearer, 1, blinder(0))
+            == expected,
+    );
 }
 
 #[test(should_fail_with = "bearer too long")]
 fn a_length_past_the_buffer_is_refused() {
-    let bearer: [u8; MAX_BEARER_LEN] = [0x61; MAX_BEARER_LEN];
-    constrain_bearer(bearer, MAX_BEARER_LEN + 1);
+    let bearer: [u8; MAX_BEARER_LEN_X] = [0x61; MAX_BEARER_LEN_X];
+    constrain_bearer(bearer, MAX_BEARER_LEN_X + 1);
 }
 
 #[test]
 fn the_shortest_and_longest_bearers_are_accepted() {
-    let mut shortest: [u8; MAX_BEARER_LEN] = [0; MAX_BEARER_LEN];
+    let mut shortest: [u8; MAX_BEARER_LEN_X] = [0; MAX_BEARER_LEN_X];
     shortest[0] = 0x20; // the low edge of the permitted set
     constrain_bearer(shortest, 1);
 
     // 128 bytes, the whole buffer, at the high edge.
-    let longest: [u8; MAX_BEARER_LEN] = [0x7e; MAX_BEARER_LEN];
-    constrain_bearer(longest, MAX_BEARER_LEN);
+    let longest: [u8; MAX_BEARER_LEN_X] = [0x7e; MAX_BEARER_LEN_X];
+    constrain_bearer(longest, MAX_BEARER_LEN_X);
+}
+
+#[test]
+fn a_github_bearer_fits_its_47_byte_cap() {
+    // A `gho_` token is 40 bytes.
+    let token: [u8; MAX_BEARER_LEN_GITHUB] =
+        padded("gho_0123456789abcdefABCDEF0123456789abcd".as_bytes());
+    constrain_bearer(token, 40);
+
+    let longest: [u8; MAX_BEARER_LEN_GITHUB] = [0x7e; MAX_BEARER_LEN_GITHUB];
+    constrain_bearer(longest, 47);
+}
+
+#[test(should_fail_with = "bearer too long")]
+fn a_github_bearer_past_its_cap_is_refused() {
+    let bearer: [u8; MAX_BEARER_LEN_GITHUB] = [0x61; MAX_BEARER_LEN_GITHUB];
+    constrain_bearer(bearer, 48);
 }
 
 // --- hash_commit ------------------------------------------------------------
@@ -74,7 +102,7 @@ fn hash_commit_matches_an_independent_vector() {
 #[test]
 fn hash_commit_covers_the_shortest_and_longest_bearer() {
     // python3 -c "import hashlib; print(hashlib.sha256(b' ' + bytes(range(16))).hexdigest())"
-    let mut shortest: [u8; MAX_BEARER_LEN] = [0; MAX_BEARER_LEN];
+    let mut shortest: [u8; MAX_BEARER_LEN_X] = [0; MAX_BEARER_LEN_X];
     shortest[0] = 0x20;
     let expected_shortest: [u8; 32] = [
         0x69, 0x32, 0x2d, 0x7a, 0x78, 0x71, 0x90, 0x8c, 0xe8, 0x91, 0x2c, 0x6f, 0x96, 0xe4, 0xa4,
@@ -82,21 +110,21 @@ fn hash_commit_covers_the_shortest_and_longest_bearer() {
         0xf9, 0x48,
     ];
     assert(
-        hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(shortest, 1, blinder(0))
+        hash_commit::<MAX_BEARER_LEN_X, MAX_BEARER_LEN_X + BLINDER_LEN>(shortest, 1, blinder(0))
             == expected_shortest,
     );
 
     // python3 -c "import hashlib; print(hashlib.sha256(b'~'*128 + bytes(range(16))).hexdigest())"
-    let longest: [u8; MAX_BEARER_LEN] = [0x7e; MAX_BEARER_LEN];
+    let longest: [u8; MAX_BEARER_LEN_X] = [0x7e; MAX_BEARER_LEN_X];
     let expected_longest: [u8; 32] = [
         0xb1, 0x04, 0xc2, 0x2e, 0xdf, 0xd0, 0xe8, 0xdc, 0x11, 0x2d, 0xd4, 0x87, 0x1a, 0xd4, 0xfc,
         0xc1, 0xcb, 0x37, 0xce, 0xc7, 0x2d, 0xd6, 0xf7, 0xa6, 0xd2, 0x56, 0x65, 0xb9, 0xfb, 0xe2,
         0x81, 0x3f,
     ];
     assert(
-        hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(
+        hash_commit::<MAX_BEARER_LEN_X, MAX_BEARER_LEN_X + BLINDER_LEN>(
             longest,
-            MAX_BEARER_LEN,
+            MAX_BEARER_LEN_X,
             blinder(0),
         )
             == expected_longest,
@@ -106,35 +134,53 @@ fn hash_commit_covers_the_shortest_and_longest_bearer() {
 #[test]
 fn independent_blinders_give_different_commitments() {
     // REQ-COMMON-44: nothing outside a proof links the two sessions.
-    let bearer: [u8; MAX_BEARER_LEN] = [0x7e; MAX_BEARER_LEN];
+    let bearer: [u8; MAX_BEARER_LEN_X] = [0x7e; MAX_BEARER_LEN_X];
     let other: [u8; BLINDER_LEN] = [0x42; BLINDER_LEN];
-    let a = hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(
+    let a = hash_commit::<MAX_BEARER_LEN_X, MAX_BEARER_LEN_X + BLINDER_LEN>(
         bearer,
-        MAX_BEARER_LEN,
+        MAX_BEARER_LEN_X,
         blinder(0),
     );
-    let b =
-        hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(bearer, MAX_BEARER_LEN, other);
+    let b = hash_commit::<MAX_BEARER_LEN_X, MAX_BEARER_LEN_X + BLINDER_LEN>(
+        bearer,
+        MAX_BEARER_LEN_X,
+        other,
+    );
     assert(a != b);
 }
 
 // --- check_id ---------------------------------------------------------------
 
-#[test(should_fail_with = "id tail must be zero-padded")]
-fn bytes_past_the_id_are_refused() {
-    // The tail is not hashed, so it must be zero.
+#[test]
+fn the_bytes_past_the_id_change_nothing() {
+    // A letter past the id is not checked, and the node is still
+    // SHA256("libid.x.user-id" || "2244994945"), handles.json's vector.
     let mut id: [u8; table::MAX_ID_X] = padded("2244994945".as_bytes());
-    id[11] = 0x31;
+    id[10] = 0x61;
+    id[19] = 0xff;
     check_id(id, 10, table::ID_RULES_X);
+    assert(
+        node_halves(table::USER_ID_TAG_X, id, 10)
+            == [0x68291869976ffad2abf3e933ec9ab262, 0x3395ff8b3b9242e655e1da3ef43d4f94],
+    );
 }
 
 // --- normalize_handle -------------------------------------------------------
 
-#[test(should_fail_with = "handle tail must be zero-padded")]
-fn bytes_past_the_handle_are_refused() {
+#[test]
+fn the_bytes_past_the_handle_change_nothing() {
+    // python3 -c "import hashlib; print(hashlib.sha256(b'libid.x.handle' + b'al_1').hexdigest())"
+    // A hyphen past the handle is not checked; the folded handle is zero there.
     let mut handle: [u8; table::MAX_HANDLE_X] = padded("Al_1".as_bytes());
-    handle[5] = 0x61;
-    let _ = normalize_handle(handle, 4, table::HANDLE_RULES_X);
+    handle[4] = 0x2d;
+    handle[14] = 0xff;
+    let out = normalize_handle(handle, 4, table::HANDLE_RULES_X);
+    let expected: [u8; table::MAX_HANDLE_X] = padded("al_1".as_bytes());
+    assert(out == expected);
+    assert(
+        node_halves(table::HANDLE_TAG_X, out, 4)
+            == [0x7fd25f75b7b97e348f2fadca95dde204, 0x897ae05f053c911eff907d6931108b90],
+    );
 }
 
 // --- The table's buffers ----------------------------------------------------

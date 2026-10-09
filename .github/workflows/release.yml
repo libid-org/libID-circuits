@@ -8,7 +8,8 @@ name: Release
 #                                               <package>.json, vk, vk_hash,
 #                                               <Contract>.sol,
 #                                               handles-table.nr
-#   manifest.json                               version, toolchain pins, and
+#   manifest.json                               version, circuits commit,
+#                                               toolchain pins, and
 #                                               sha256 of every tarball and
 #                                               every file inside them
 #
@@ -128,10 +129,11 @@ jobs:
           jq -n \
             --arg version "$version" \
             --arg tag "$TAG" \
+            --arg commit "$(cat artifacts/commit)" \
             --arg nargo "$NARGO_VERSION" \
             --arg bb "$BB_VERSION" \
             --argjson tarballs "$manifest_files" \
-            '{version: $version, tag: $tag,
+            '{version: $version, tag: $tag, commit: $commit,
               toolchain: {nargo: $nargo, bb: $bb},
               tarballs: $tarballs}' > dist/manifest.json
 

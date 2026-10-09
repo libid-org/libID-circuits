@@ -20,9 +20,14 @@ support, which fits libID's client-side proving use case almost perfectly.
 
 | Circuit | Package | Proves |
 |---|---|---|
-| `circuits/bearer-link-x` | `bearer_link_x` | X's bearer link plus the account as keys. The identity response reveals only the anchors around `id` and `username`; the circuit opens the two committed values as X sent them, checks them against X's rules, folds the handle, and outputs `idNode = SHA256("libid.x.user-id" \|\| id)` and `handleNode = SHA256("libid.x.handle" \|\| fold(handle))`. 72 public inputs: the two bearer commitments (64 bytes), then the id and handle commitments and the two nodes as 16-byte halves. Neither value reaches the chain. |
-| `circuits/bearer-link-github` | `bearer_link_github` | The same relation for GitHub: the bearer link, and the committed `id` (a JSON integer, its digits alone) and `login` opened, checked against GitHub's rules, the login folded, and output as `SHA256("libid.github.user-id" \|\| id)` and `SHA256("libid.github.handle" \|\| fold(login))`. The same 72 public inputs. |
-| `circuits/oidc-google` | `oidc_google` | Possession of a Google OIDC JWT: verifies the RSASSA-PKCS1-v1_5 signature over `header.payload` and exposes the Authorization Digest carried in `nonce`, `SHA256(aud)`, the id node `SHA256("libid.google.user-id" \|\| sub)`, the handle node `SHA256("libid.google.handle" \|\| fold(email))` (the `sub` and the address stay private; the address is checked against the Google rules and folded in the circuit), `exp`, and the modulus that verified. The Platform Verifier alone decides whether that modulus is trusted. |
+| `circuits/bearer-link-x` | `bearer_link_x` | X's bearer link plus the account as keys. The identity response reveals only the anchors around `id` and `username`; the circuit opens the two committed values as X sent them, checks them against X's rules, folds the handle, and outputs `idNode = SHA256("libid.x.user-id" \|\| id)` and `handleNode = SHA256("libid.x.handle" \|\| fold(handle))`. 12 public inputs: the two bearer commitments, the id and handle commitments and the two nodes, each as two 16-byte halves. Neither value appears in plaintext; see the note below the table. The bearer is at most 128 bytes. |
+| `circuits/bearer-link-github` | `bearer_link_github` | The same relation for GitHub: the bearer link, and the committed `id` (a JSON integer, its digits alone) and `login` opened, checked against GitHub's rules, the login folded, and output as `SHA256("libid.github.user-id" \|\| id)` and `SHA256("libid.github.handle" \|\| fold(login))`. The same 12 public inputs. The bearer is at most 47 bytes; a `gho_` token is 40. |
+| `circuits/oidc-google` | `oidc_google` | Possession of a Google OIDC JWT: verifies the RSASSA-PKCS1-v1_5 signature over `header.payload` and exposes the Authorization Digest carried in `nonce`, `SHA256(aud)`, the id node `SHA256("libid.google.user-id" \|\| sub)`, the handle node `SHA256("libid.google.handle" \|\| fold(email))` (the `sub` and the address are not disclosed; the address is checked against the Google rules and folded in the circuit), `exp`, and the modulus that verified. The Platform Verifier alone decides whether that modulus is trusted. |
+
+A node is an unsalted tagged SHA-256, so anyone can hash a guess and compare.
+The id and handle are not disclosed, which is weaker than secret. In the
+bearer-link flows their byte lengths are public. GitHub ids are sequential, so
+a GitHub id node is effectively public.
 
 CI enforces `nargo fmt --check` on every package.
 
@@ -53,10 +58,18 @@ table must match. CI fetches that commit and runs its
 and that `scripts/google-fixture-witness.py`'s `DIGEST` is those sessions'
 `authorization_digest`. It needs git and Python only.
 
-The pin must be a commit on libID-contracts' main: a change spanning both
-repositories merges there first, then `contracts.ref` moves to the merged
-commit. A feature-branch pin fails once that branch is deleted. To move the
-pin after regenerating the table:
+The pin must end on a commit on libID-contracts' main; a feature-branch pin
+fails once that branch is deleted. A change spanning both repositories lands
+in this order:
+
+1. Cut a pre-release tag here from the PR branch.
+2. libID-contracts pins it in `circuits.json` (version and sha256s).
+3. libID-contracts' CI goes green and its PR merges.
+4. `contracts.ref` moves to that merged commit on main, and this PR merges.
+
+A squash merge must keep the tagged tree identical apart from
+`contracts.ref`, so the release libID-contracts pins still matches main. To
+move the pin after regenerating the table:
 
 ```sh
 git -C ../libid-contracts rev-parse HEAD > contracts.ref
@@ -242,6 +255,6 @@ Verification keys under the pinned toolchain (nargo 1.0.0-rc.3, bb 6.0.0-rc.2):
 
 | Circuit | vk_hash |
 |---|---|
-| `bearer-link-x` | `0x1f09866b4c8feca602a2d394a5c8c924d3b8d964696f0214252ab97c9213775d` |
-| `bearer-link-github` | `0x1168344f46c63b1fa251c174f4b4d4e7c104cf65ab38d36fcbcf66108e626770` |
-| `oidc-google` | `0x2b2c5f9b3301f9ba7b6d69db7baaebc124b09959b7fb7ae87734ecb56667a488` |
+| `bearer-link-x` | `0x1190c3602c122063f24a1b9292ff2869c66012ea8f34f36bf930dffb6fe0a047` |
+| `bearer-link-github` | `0x2ddfe7539d1b99f2fcbb1788befeb8ef0b27190ad330650cc8493a2edecce303` |
+| `oidc-google` | `0x1b88ff47cad31a9d7993a69a2b518d915aa6a34e9e62fb508f7d58e4ad92a55e` |

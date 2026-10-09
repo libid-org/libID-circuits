@@ -86,7 +86,12 @@ def main() -> int:
     user_id, blinder_id = opened(witness, "id")
     handle, blinder_handle = opened(witness, "handle")
 
-    max_bearer = identity_table.integer("MAX_BEARER_LEN", identity_table.LIB)
+    max_bearer = identity_table.integer(f"MAX_BEARER_LEN_{suffix}", identity_table.LIB)
+    if len(bearer) > max_bearer:
+        raise SystemExit(
+            f"{args.witness}: the bearer is {len(bearer)} bytes; the bearer-link-{platform} circuit "
+            f"caps it at {max_bearer} (MAX_BEARER_LEN_{suffix} in lib/identity/src/lib.nr)"
+        )
     max_id = identity_table.integer(f"MAX_ID_{suffix}")
     max_handle = identity_table.integer(f"MAX_HANDLE_{suffix}")
     id_tag = identity_table.byte_array(f"USER_ID_TAG_{suffix}")
@@ -109,8 +114,8 @@ def main() -> int:
         f"handle = {toml_array(identity_table.padded('handle', handle, max_handle))}",
         f'handle_len = "{len(handle)}"',
         f"blinder_handle = {toml_array(blinder_handle)}",
-        f"token_commitment = {toml_array(commitment(witness['token_bearer']))}",
-        f"identity_commitment = {toml_array(commitment(witness['identity_bearer']))}",
+        f"token_commitment = {toml_array(identity_table.halves(commitment(witness['token_bearer'])))}",
+        f"identity_commitment = {toml_array(identity_table.halves(commitment(witness['identity_bearer'])))}",
         f"id_commitment = {toml_array(identity_table.halves(commitment(witness['id'])))}",
         f"handle_commitment = {toml_array(identity_table.halves(commitment(witness['handle'])))}",
         f"id_node = {toml_array(identity_table.halves(hashlib.sha256(id_tag + user_id).digest()))}",

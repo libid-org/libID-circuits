@@ -1,19 +1,19 @@
 // libID bearer-link circuit for GitHub: `identity_link` with GitHub's tags and
 // rules (REQ-PLAT-52). The login is the handle.
 //
-// Public inputs, in order (72 fields):
-//   0-31   token_commitment     one byte per field
-//   32-63  identity_commitment  one byte per field
-//   64-65  id_commitment        [high, low] 16-byte big-endian halves
-//   66-67  handle_commitment    halves
-//   68-69  id_node              halves
-//   70-71  handle_node          halves
-// 0-67 come from the notary-signed records; 68-71 are the claimed nodes.
+// Public inputs, in order (12 fields), each 32-byte value as [high, low] halves:
+//   0-1    token_commitment
+//   2-3    identity_commitment
+//   4-5    id_commitment
+//   6-7    handle_commitment
+//   8-9    id_node
+//   10-11  handle_node
+// 0-7 come from the notary-signed records; 8-11 are the claimed nodes.
 
 use libid_identity::{
     BLINDER_LEN,
     identity_link,
-    MAX_BEARER_LEN,
+    MAX_BEARER_LEN_GITHUB,
     table::{
         HANDLE_RULES_GITHUB, HANDLE_TAG_GITHUB, ID_RULES_GITHUB, MAX_HANDLE_GITHUB, MAX_ID_GITHUB,
         USER_ID_TAG_GITHUB,
@@ -22,7 +22,7 @@ use libid_identity::{
 
 fn main(
     // --- Private ---
-    bearer: [u8; MAX_BEARER_LEN],
+    bearer: [u8; MAX_BEARER_LEN_GITHUB],
     bearer_len: u32,
     blinder_token: [u8; BLINDER_LEN],
     blinder_identity: [u8; BLINDER_LEN],
@@ -33,8 +33,8 @@ fn main(
     handle_len: u32,
     blinder_handle: [u8; BLINDER_LEN],
     // --- Public ---
-    token_commitment: pub [u8; 32],
-    identity_commitment: pub [u8; 32],
+    token_commitment: pub [Field; 2],
+    identity_commitment: pub [Field; 2],
     id_commitment: pub [Field; 2],
     handle_commitment: pub [Field; 2],
     id_node: pub [Field; 2],
@@ -72,14 +72,14 @@ use libid_identity::testing::{blinder, padded};
 // bytes(0..16) to (48..64), id "583231", login "Octo-Cat" (node of "octo-cat").
 
 struct Case {
-    bearer: [u8; MAX_BEARER_LEN],
+    bearer: [u8; MAX_BEARER_LEN_GITHUB],
     bearer_len: u32,
     id: [u8; MAX_ID_GITHUB],
     id_len: u32,
     handle: [u8; MAX_HANDLE_GITHUB],
     handle_len: u32,
-    token_commitment: [u8; 32],
-    identity_commitment: [u8; 32],
+    token_commitment: [Field; 2],
+    identity_commitment: [Field; 2],
     id_commitment: [Field; 2],
     handle_commitment: [Field; 2],
     id_node: [Field; 2],
@@ -95,12 +95,12 @@ fn case() -> Case {
         handle: padded("Octo-Cat".as_bytes()),
         handle_len: 8,
         token_commitment: [
-            207, 83, 93, 174, 152, 218, 205, 138, 32, 116, 63, 118, 148, 60, 162, 49, 146, 117, 24,
-            80, 183, 204, 31, 63, 28, 72, 222, 122, 37, 29, 22, 5,
+            275583055863835631426238934984850973233,
+            194675279290012306279782582067549509125,
         ],
         identity_commitment: [
-            135, 89, 105, 31, 8, 117, 147, 97, 156, 20, 24, 212, 126, 245, 194, 145, 152, 69, 21,
-            189, 48, 78, 137, 216, 83, 105, 245, 241, 249, 166, 7, 21,
+            179910025963072684256461617793699529361,
+            202401364762220735308855968515813148437,
         ],
         id_commitment: [
             236842316908673321235639020295625166279,

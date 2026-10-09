@@ -100,7 +100,7 @@ fn main(
     authorization_digest: pub [u8; DIGEST_LEN],
     // Full SHA-256(client_id), packed as two big-endian 16-byte Fields.
     audience_hash: pub [Field; 2],
-    // SHA-256(`libid.google.user-id` || `sub`) as halves; the `sub` stays private.
+    // SHA-256(`libid.google.user-id` || `sub`) as halves; the `sub` is not disclosed.
     id_node: pub [Field; 2],
     // SHA-256(`libid.google.handle` || folded address) as halves.
     handle_node: pub [Field; 2],
@@ -183,7 +183,7 @@ fn main(
             assert(payload_json[sub_offset + SUB_PREFIX_LEN + i] == sub_bytes[i]);
         }
     }
-    // REQ-PLAT-04: 1-31 bytes of printable ASCII without `"` or `\`, zero tail.
+    // REQ-PLAT-04: 1-31 bytes of printable ASCII without `"` or `\`.
     // Only the node leaves the circuit, so no later role can check these bytes.
     check_id(sub_bytes, sub_len, ID_RULES_GOOGLE);
     assert(payload_json[sub_offset + SUB_PREFIX_LEN + sub_len] == 34); // closing `"`
@@ -248,8 +248,6 @@ fn main(
         if i < audience_len {
             assert(payload_json[aud_offset + AUD_PREFIX_LEN + i] == audience_bytes[i]);
             assert(audience_bytes[i] != 34);
-        } else {
-            assert(audience_bytes[i] == 0);
         }
     }
     assert(payload_json[aud_offset + AUD_PREFIX_LEN + audience_len] == 34);
