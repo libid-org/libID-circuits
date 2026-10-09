@@ -53,10 +53,18 @@ table must match. CI fetches that commit and runs its
 and that `scripts/google-fixture-witness.py`'s `DIGEST` is those sessions'
 `authorization_digest`. It needs git and Python only.
 
-The pin must be a commit on libID-contracts' main: a change spanning both
-repositories merges there first, then `contracts.ref` moves to the merged
-commit. A feature-branch pin fails once that branch is deleted. To move the
-pin after regenerating the table:
+The pin must end on a commit on libID-contracts' main; a feature-branch pin
+fails once that branch is deleted. A change spanning both repositories lands
+in this order:
+
+1. Cut a pre-release tag here from the PR branch.
+2. libID-contracts pins it in `circuits.json` (version and sha256s).
+3. libID-contracts' CI goes green and its PR merges.
+4. `contracts.ref` moves to that merged commit on main, and this PR merges.
+
+A squash merge must keep the tagged tree identical apart from
+`contracts.ref`, so the release libID-contracts pins still matches main. To
+move the pin after regenerating the table:
 
 ```sh
 git -C ../libid-contracts rev-parse HEAD > contracts.ref
