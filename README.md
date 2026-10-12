@@ -255,6 +255,6 @@ Verification keys under the pinned toolchain (nargo 1.0.0-rc.3, bb 6.0.0-rc.2):
 
 | Circuit | vk_hash |
 |---|---|
-| `bearer-link-x` | `0x1190c3602c122063f24a1b9292ff2869c66012ea8f34f36bf930dffb6fe0a047` |
-| `bearer-link-github` | `0x2ddfe7539d1b99f2fcbb1788befeb8ef0b27190ad330650cc8493a2edecce303` |
+| `bearer-link-x` | `0x2d43f2ed1ef0e1955be8baa90d9f037c572308ca621eb89c6f497fbf36cc1daa` |
+| `bearer-link-github` | `0x30178fd1bcbd28d61c4603bf20d3c7a0a78c4474973e6c0900a4c473be82984b` |
 | `oidc-google` | `0x1b88ff47cad31a9d7993a69a2b518d915aa6a34e9e62fb508f7d58e4ad92a55e` |
