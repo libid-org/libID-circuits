@@ -398,6 +398,56 @@ fn the_id_node_covers_the_shortest_and_longest_sub() {
     assert(got == [0x8f656d800bef67cbaa34852bb16202c6, 0x4189a0ab5ae94d9ecc9d82c830989dcf]);
 }
 
+// Bytes past each length are the prover's: 0xff there changes no node or hash.
+// Expected halves are hashlib's over the clean value.
+
+fn dirty<let N: u32>(value: [u8; N], len: u32) -> [u8; N] {
+    let mut out = value;
+    for i in 0..N {
+        if i >= len {
+            out[i] = 0xff;
+        }
+    }
+    out
+}
+
+#[test]
+fn bytes_past_email_len_leave_the_handle_node() {
+    // hashlib.sha256(b"libid.google.handle" + b"fixture@example.com")
+    let email: [u8; EMAIL_MAX] = dirty(padded("Fixture@Example.com".as_bytes()), 19);
+    let folded = normalize_handle(email, 19, HANDLE_RULES_GOOGLE);
+    assert(
+        node_halves(HANDLE_TAG_GOOGLE, folded, 19)
+            == [0xfbda24950a7bc55993b7aacc3acbde63, 0x6931dbb45f04c1ff6f6909027962885f],
+    );
+}
+
+#[test]
+fn bytes_past_sub_len_leave_the_id_node() {
+    // hashlib.sha256(b"libid.google.user-id" + b"123456789012345678901")
+    let sub: [u8; SUB_MAX] = dirty(padded("123456789012345678901".as_bytes()), 21);
+    check_id(sub, 21, ID_RULES_GOOGLE);
+    assert(
+        node_halves(USER_ID_TAG_GOOGLE, sub, 21)
+            == [0xa83e66b34468315fb68c3098b3c521b7, 0x49aafb1db3390cb53ec03a8db139f2c7],
+    );
+}
+
+#[test]
+fn bytes_past_audience_len_leave_the_audience_hash() {
+    // hashlib.sha256(b"000000000000-libidfixture.apps.googleusercontent.com")
+    let audience: [u8; AUDIENCE_MAX] = dirty(
+        padded(
+            "000000000000-libidfixture.apps.googleusercontent.com".as_bytes(),
+        ),
+        52,
+    );
+    assert(
+        halves(sha256_var(audience, 52))
+            == [0x87daf516efdacbc7c2d65c17ca02e665, 0xbfaadc8f16015150477a561841312be6],
+    );
+}
+
 // `check_id` under ID_RULES_GOOGLE; the table's vectors cover `"`, `\` and tab.
 
 fn sub_with(byte: u8) -> [u8; SUB_MAX] {

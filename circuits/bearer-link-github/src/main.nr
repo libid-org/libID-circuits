@@ -180,3 +180,17 @@ fn an_underscore_is_x_s_not_github_s() {
     c.handle[4] = 0x5f;
     run(c);
 }
+
+#[test(should_fail_with = "id node mismatch")]
+fn an_id_node_off_in_its_low_half_is_refused() {
+    let mut c = case();
+    c.id_node[1] += 1;
+    run(c);
+}
+
+#[test(should_fail_with = "handle node mismatch")]
+fn a_handle_node_off_in_its_low_half_is_refused() {
+    let mut c = case();
+    c.handle_node[1] += 1;
+    run(c);
+}

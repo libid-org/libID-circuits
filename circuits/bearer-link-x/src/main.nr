@@ -195,3 +195,17 @@ fn a_handle_outside_x_s_rules_is_refused_before_any_hash() {
     c.handle[2] = 0x2d;
     run(c);
 }
+
+#[test(should_fail_with = "id node mismatch")]
+fn an_id_node_off_in_its_low_half_is_refused() {
+    let mut c = case();
+    c.id_node[1] += 1;
+    run(c);
+}
+
+#[test(should_fail_with = "handle node mismatch")]
+fn a_handle_node_off_in_its_low_half_is_refused() {
+    let mut c = case();
+    c.handle_node[1] += 1;
+    run(c);
+}
