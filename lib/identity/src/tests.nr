@@ -99,6 +99,12 @@ fn hash_commit_matches_an_independent_vector() {
     assert(hash_commit::<4, 20>(plaintext, 4, blinder) == expected);
 }
 
+#[test(should_fail_with = "committed value is empty")]
+fn hash_commit_refuses_an_empty_value() {
+    let plaintext: [u8; 4] = [0x61; 4];
+    let _ = hash_commit::<4, 20>(plaintext, 0, blinder(0));
+}
+
 #[test]
 fn hash_commit_covers_the_shortest_and_longest_bearer() {
     // python3 -c "import hashlib; print(hashlib.sha256(b' ' + bytes(range(16))).hexdigest())"

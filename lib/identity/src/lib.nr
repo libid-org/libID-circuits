@@ -52,7 +52,7 @@ pub fn constrain_bearer<let MAX: u32>(bearer: [u8; MAX], bearer_len: u32) {
     }
 }
 
-/// A tlsn hash commitment, `SHA256(plaintext[0..plaintext_len] || blinder)`.
+/// A tlsn hash commitment of a nonempty value, `SHA256(plaintext[0..plaintext_len] || blinder)`.
 /// `TOTAL` is `MAX_PLAIN + BLINDER_LEN`; Noir array types cannot express the sum.
 pub fn hash_commit<let MAX_PLAIN: u32, let TOTAL: u32>(
     plaintext_padded: [u8; MAX_PLAIN],
@@ -60,6 +60,7 @@ pub fn hash_commit<let MAX_PLAIN: u32, let TOTAL: u32>(
     blinder: [u8; BLINDER_LEN],
 ) -> [u8; 32] {
     assert(TOTAL == MAX_PLAIN + BLINDER_LEN, "TOTAL must equal MAX_PLAIN + BLINDER_LEN");
+    assert(plaintext_len != 0, "committed value is empty");
     assert(plaintext_len <= MAX_PLAIN, "committed value longer than its buffer");
 
     let mut input: [u8; TOTAL] = [0; TOTAL];
