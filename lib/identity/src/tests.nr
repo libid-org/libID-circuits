@@ -68,20 +68,20 @@ fn the_shortest_and_longest_bearers_are_accepted() {
 }
 
 #[test]
-fn a_github_bearer_fits_its_47_byte_cap() {
+fn a_github_bearer_fits_its_cap() {
     // A `gho_` token is 40 bytes.
     let token: [u8; MAX_BEARER_LEN_GITHUB] =
         padded("gho_0123456789abcdefABCDEF0123456789abcd".as_bytes());
     constrain_bearer(token, 40);
 
     let longest: [u8; MAX_BEARER_LEN_GITHUB] = [0x7e; MAX_BEARER_LEN_GITHUB];
-    constrain_bearer(longest, 47);
+    constrain_bearer(longest, MAX_BEARER_LEN_GITHUB);
 }
 
 #[test(should_fail_with = "bearer too long")]
 fn a_github_bearer_past_its_cap_is_refused() {
     let bearer: [u8; MAX_BEARER_LEN_GITHUB] = [0x61; MAX_BEARER_LEN_GITHUB];
-    constrain_bearer(bearer, 48);
+    constrain_bearer(bearer, MAX_BEARER_LEN_GITHUB + 1);
 }
 
 // --- hash_commit ------------------------------------------------------------

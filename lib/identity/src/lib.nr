@@ -34,9 +34,9 @@ pub struct IdRules {
 pub global ID_BOUND_LEN: u32 = 20;
 
 /// Each circuit's bearer cap, the opening's main cost (REQ-PLAT-30/36 allow 4096).
-/// GitHub's 47 keeps bearer-link-github under 2^16; a live X bearer measured 91 bytes.
+/// A live X bearer measured 91 bytes, a GitHub `gho_` token is 40.
 pub global MAX_BEARER_LEN_X: u32 = 128;
-pub global MAX_BEARER_LEN_GITHUB: u32 = 47;
+pub global MAX_BEARER_LEN_GITHUB: u32 = 128;
 
 /// An opened bearer: nonempty, printable ASCII (REQ-PLAT-30, REQ-PLAT-36,
 /// REQ-COMMON-20). No CR or LF, so REQ-COMMON-37 holds. The tail is not read.
