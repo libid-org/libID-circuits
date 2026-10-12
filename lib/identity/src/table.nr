@@ -13,7 +13,7 @@ use crate::{HandleRules, IdRules};
 
 /// SHA-256 of the handles.json this file was generated from.
 pub global TABLE_SHA256: str<64> =
-    "5d4c0d0db7fbab4307f7ae93add39f99344cded07e5bc8fef662369619940029";
+    "8c6fb5a7ae50e0b1a039fd8b58374215cc60eccc9586a2d43cbbb3bee0cee5a7";
 
 /// `libid.x.user-id`
 pub global USER_ID_TAG_X: [u8; 15] =
@@ -65,7 +65,17 @@ pub global ID_BYTES_X: [bool; 256] = [
 ];
 pub global HANDLE_RULES_X: HandleRules =
     HandleRules { max_len: 15, allow_hyphen: false, is_email: false, bytes: HANDLE_BYTES_X };
-pub global ID_RULES_X: IdRules = IdRules { max_len: 20, leading_zero: false, bytes: ID_BYTES_X };
+pub global ID_RULES_X: IdRules = IdRules {
+    max_len: 20,
+    leading_zero: false,
+    nonzero: true,
+    bounded: true,
+    max: [
+        0x31, 0x38, 0x34, 0x34, 0x36, 0x37, 0x34, 0x34, 0x30, 0x37, 0x33, 0x37, 0x30, 0x39, 0x35,
+        0x35, 0x31, 0x36, 0x31, 0x35,
+    ],
+    bytes: ID_BYTES_X,
+};
 
 /// `libid.github.user-id`
 pub global USER_ID_TAG_GITHUB: [u8; 20] = [
@@ -121,8 +131,17 @@ pub global ID_BYTES_GITHUB: [bool; 256] = [
 ];
 pub global HANDLE_RULES_GITHUB: HandleRules =
     HandleRules { max_len: 39, allow_hyphen: true, is_email: false, bytes: HANDLE_BYTES_GITHUB };
-pub global ID_RULES_GITHUB: IdRules =
-    IdRules { max_len: 20, leading_zero: false, bytes: ID_BYTES_GITHUB };
+pub global ID_RULES_GITHUB: IdRules = IdRules {
+    max_len: 20,
+    leading_zero: false,
+    nonzero: true,
+    bounded: true,
+    max: [
+        0x31, 0x38, 0x34, 0x34, 0x36, 0x37, 0x34, 0x34, 0x30, 0x37, 0x33, 0x37, 0x30, 0x39, 0x35,
+        0x35, 0x31, 0x36, 0x31, 0x35,
+    ],
+    bytes: ID_BYTES_GITHUB,
+};
 
 /// `libid.google.user-id`
 pub global USER_ID_TAG_GOOGLE: [u8; 20] = [
@@ -177,5 +196,14 @@ pub global ID_BYTES_GOOGLE: [bool; 256] = [
 ];
 pub global HANDLE_RULES_GOOGLE: HandleRules =
     HandleRules { max_len: 62, allow_hyphen: false, is_email: true, bytes: HANDLE_BYTES_GOOGLE };
-pub global ID_RULES_GOOGLE: IdRules =
-    IdRules { max_len: 31, leading_zero: true, bytes: ID_BYTES_GOOGLE };
+pub global ID_RULES_GOOGLE: IdRules = IdRules {
+    max_len: 31,
+    leading_zero: true,
+    nonzero: false,
+    bounded: false,
+    max: [
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00,
+    ],
+    bytes: ID_BYTES_GOOGLE,
+};

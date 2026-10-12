@@ -19,12 +19,19 @@ pub struct HandleRules {
     pub bytes: [u8; 256],
 }
 
-/// What a platform allows in an id. `bytes[b]` says whether `b` may appear.
+/// What a platform allows in an id. `bytes[b]` says whether `b` may appear;
+/// when `bounded`, an id as long as `max_len` may not exceed `max`'s digits.
 pub struct IdRules {
     pub max_len: u32,
     pub leading_zero: bool,
+    pub nonzero: bool,
+    pub bounded: bool,
+    pub max: [u8; ID_BOUND_LEN],
     pub bytes: [bool; 256],
 }
+
+/// The width of `IdRules.max`: 2^64-1 has 20 digits.
+pub global ID_BOUND_LEN: u32 = 20;
 
 /// Each circuit's bearer cap, the opening's main cost (REQ-PLAT-30/36 allow 4096).
 /// GitHub's 47 keeps bearer-link-github under 2^16; a live X bearer measured 91 bytes.
@@ -153,6 +160,22 @@ pub fn check_id<let MAX: u32>(raw: [u8; MAX], len: u32, rules: IdRules) {
     }
     if !rules.leading_zero {
         assert((len == 1) | (raw[0] != 0x30), "id shape not allowed");
+    }
+    if rules.nonzero {
+        assert((len != 1) | (raw[0] != 0x30), "id shape not allowed");
+    }
+    // Equal-length digit strings order as their numbers do.
+    let mut above = false;
+    let mut decided = false;
+    for i in 0..ID_BOUND_LEN {
+        if (i < MAX) & (i < len) & !decided {
+            let (b, m) = (raw[i], rules.max[i]);
+            above = b > m;
+            decided = b != m;
+        }
+    }
+    if rules.bounded & (len == rules.max_len) {
+        assert(!above, "id shape not allowed");
     }
 }
 
