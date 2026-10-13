@@ -23,7 +23,7 @@
 #                     and tags
 #
 # and <out>/commit: the circuits commit built, with `-dirty` when the tree has
-# modified or untracked files.
+# modified or untracked files, or `unknown` outside a readable git work tree.
 #
 # The vk derives from the ACIR bytecode alone, and the Solidity verifier from
 # the vk alone — so a release tarball is the complete, sufficient input for
@@ -80,10 +80,15 @@ fi
 
 TABLE="$ROOT/lib/identity/src/table.nr"
 
-# Read before building, so build output cannot mark the tree dirty.
-commit="$(git -C "$ROOT" rev-parse HEAD)"
-if [[ -n "$(git -C "$ROOT" status --porcelain)" ]]; then
-  commit="$commit-dirty"
+# Read before building, so build output cannot mark the tree dirty. Unless
+# git reads $ROOT as its own work tree (not a parent's), the commit is `unknown`.
+if [[ "$(git -C "$ROOT" rev-parse --show-toplevel 2>/dev/null)" == "$(cd "$ROOT" && pwd -P)" ]] \
+  && commit="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null)" \
+  && status="$(git -C "$ROOT" status --porcelain 2>/dev/null)"; then
+  [[ -z "$status" ]] || commit="$commit-dirty"
+else
+  commit=unknown
+  echo "warning: git cannot read $ROOT; recording commit 'unknown'." >&2
 fi
 
 # --- Build -------------------------------------------------------------------
