@@ -182,7 +182,7 @@ the target is never `evm-no-zk`.
 
 The interchange format is raw `bb write_solidity_verifier` output plus
 exactly one rewrite: the contract is renamed off bb's fixed `HonkVerifier`
-to `<Circuit>HonkVerifier` (all three verifiers compile in one project). The
+to `<Circuit>HonkVerifier` (the verifiers compile in one project). The
 names the current circuits ship under are pinned in the script and checked
 on every run, so renaming a circuit directory fails the build instead of
 silently renaming the contract consumers compile. `forge fmt` is the
@@ -234,7 +234,7 @@ source with the pinned toolchain (`scripts/build.sh`) and attaches:
 
 - `libid-circuits-<version>-<circuit>.tar.gz` — one per circuit, containing
   `<package>.json`, `vk`, `vk_hash`, `<Contract>.sol` and `handles-table.nr`;
-- `manifest.json` — `{version, tag, toolchain: {nargo, bb}, tarballs:
+- `manifest.json` — `{version, tag, commit, toolchain: {nargo, bb}, tarballs:
   {<tarball>: {sha256, files: {<name>: sha256}}}}`.
 
 ## Consuming a release
@@ -249,7 +249,9 @@ manifest names.
 Also check `handles-table.nr` against your
 `handles.json` and `profiles.json` with libID-contracts'
 `scripts/regen-identity-handles.py --compare-noir handles-table.nr`. A
-mismatch means the verifier keys handles by another table.
+mismatch means the circuit's buffers, or oidc-google's compiled tags, are not
+your table's. bearer-link takes its tags as public inputs, so the verifying
+contract must pass the tags profiles.json names.
 
 Verification keys under the pinned toolchain (nargo 1.0.0-rc.3, bb 6.0.0-rc.2):
 
