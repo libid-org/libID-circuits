@@ -100,6 +100,9 @@ for dir in "$ROOT"/circuits/*/; do
   circuit="$(basename "$dir")"
   pkg="$(sed -n 's/^name *= *"\(.*\)"/\1/p' "$dir/Nargo.toml")"
   contract="$(basename "$artifacts/$circuit"/*HonkVerifier.sol .sol)"
+  bytecode="$(jq -r '.bytecode.object' "$project/out/$contract.sol/$contract.json")"
+  verifier="$(cast send --rpc-url "$rpc" --unlocked --from "$deployer" --json \
+    --create "$bytecode" | jq -r '.contractAddress')"
   for toml in "$dir"/Prover*.toml; do
     [[ -f "$toml" ]] || continue
     prover="$(basename "$toml" .toml)"
@@ -110,10 +113,6 @@ for dir in "$ROOT"/circuits/*/; do
     bb prove -b "$artifacts/$circuit/$pkg.json" -w "$dir/target/$pkg.gz" \
       -k "$artifacts/$circuit/vk" -o "$out" -t evm
     bb verify -p "$out/proof" -i "$out/public_inputs" -k "$artifacts/$circuit/vk" -t evm
-
-    bytecode="$(jq -r '.bytecode.object' "$project/out/$contract.sol/$contract.json")"
-    verifier="$(cast send --rpc-url "$rpc" --unlocked --from "$deployer" --json \
-      --create "$bytecode" | jq -r '.contractAddress')"
 
     proof="0x$(perl -0777 -ne 'print unpack("H*", $_)' "$out/proof")"
     inputs="[$(perl -0777 -ne 'print join(",", map { "0x$_" } unpack("(H64)*", $_))' "$out/public_inputs")]"

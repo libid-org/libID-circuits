@@ -2,6 +2,7 @@
 the encodings the witness scripts share."""
 from __future__ import annotations
 
+import functools
 import pathlib
 import re
 
@@ -11,6 +12,7 @@ LIB = ROOT / "lib" / "identity" / "src" / "lib.nr"
 OIDC_GOOGLE = ROOT / "circuits" / "oidc-google" / "src" / "main.nr"
 
 
+@functools.cache
 def constant(name: str, source: pathlib.Path = TABLE) -> str:
     """The right-hand side of `[pub] global <name>`, whitespace collapsed."""
     # nargo fmt wraps long constants, so read the declaration whole.

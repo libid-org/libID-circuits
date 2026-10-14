@@ -90,8 +90,7 @@ def hex_halves(digest: bytes) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    root = pathlib.Path(__file__).resolve().parent.parent
-    parser.add_argument("--out", type=pathlib.Path, default=root / "circuits" / "oidc-google" / "Prover.toml")
+    parser.add_argument("--out", type=pathlib.Path, default=identity_table.OIDC_GOOGLE.parent.parent / "Prover.toml")
     args = parser.parse_args()
 
     assert N.bit_length() == MOD_BITS and pow(pow(2, E, N), D, N) == 2
@@ -114,8 +113,8 @@ def main() -> int:
     signing_input = b64url(header) + b"." + b64url(payload)
     signature = pkcs1_sha256(signing_input, N, D)
 
-    def at(needle: str) -> int:
-        return payload.index(needle.encode())
+    def at(claim: str) -> int:
+        return payload.index(f'"{claim}":'.encode())
 
     exp_digits = str(EXP)
     folded = identity_table.fold(EMAIL.encode())
@@ -129,14 +128,14 @@ def main() -> int:
         f'header_b64_len = "{len(b64url(header))}"',
         f"payload_json = {toml_array(identity_table.padded('payload_json', payload, PAYLOAD_JSON_MAX))}",
         f'payload_json_len = "{len(payload)}"',
-        f'email_offset = "{at(chr(34) + "email" + chr(34) + ":")}"',
-        f'nonce_offset = "{at(chr(34) + "nonce" + chr(34) + ":")}"',
-        f'sub_offset = "{at(chr(34) + "sub" + chr(34) + ":")}"',
-        f'email_verified_offset = "{at(chr(34) + "email_verified" + chr(34))}"',
-        f'exp_offset = "{at(chr(34) + "exp" + chr(34) + ":")}"',
+        f'email_offset = "{at("email")}"',
+        f'nonce_offset = "{at("nonce")}"',
+        f'sub_offset = "{at("sub")}"',
+        f'email_verified_offset = "{at("email_verified")}"',
+        f'exp_offset = "{at("exp")}"',
         f'exp_len = "{len(exp_digits)}"',
-        f'iss_offset = "{at(chr(34) + "iss" + chr(34) + ":")}"',
-        f'aud_offset = "{at(chr(34) + "aud" + chr(34) + ":")}"',
+        f'iss_offset = "{at("iss")}"',
+        f'aud_offset = "{at("aud")}"',
         f"email_bytes = {toml_array(identity_table.padded('email_bytes', EMAIL.encode(), EMAIL_MAX))}",
         f'email_len = "{len(EMAIL)}"',
         f"sub_bytes = {toml_array(identity_table.padded('sub_bytes', SUB.encode(), SUB_MAX))}",

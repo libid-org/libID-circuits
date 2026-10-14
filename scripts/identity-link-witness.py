@@ -36,7 +36,8 @@ def synthetic_witness(path: pathlib.Path) -> dict:
     return doc["identity_link_witness"]
 
 
-def opened(witness: dict, name: str) -> tuple[bytes, bytes]:
+def opened(witness: dict, name: str) -> tuple[bytes, bytes, bytes]:
+    """The entry's value, blinder and the commitment they open."""
     entry = witness[name]
     value = entry["value"].encode()
     blinder = bytes.fromhex(entry["blinder"].removeprefix("0x"))
@@ -46,7 +47,7 @@ def opened(witness: dict, name: str) -> tuple[bytes, bytes]:
             f"witness entry `{name}`: commitment is not SHA256(value || blinder); "
             "check the fixture was not edited"
         )
-    return value, blinder
+    return value, blinder, commitment
 
 
 toml_array = functools.partial(identity_table.toml_array, quoted=True)
@@ -76,15 +77,15 @@ def main() -> int:
         )
     suffix = platform.upper()
 
-    bearer, blinder_token = opened(witness, "token_bearer")
-    identity_bearer, blinder_identity = opened(witness, "identity_bearer")
+    bearer, blinder_token, token_commitment = opened(witness, "token_bearer")
+    identity_bearer, blinder_identity, identity_commitment = opened(witness, "identity_bearer")
     if bearer != identity_bearer:
         raise SystemExit(
             "witness entries `token_bearer` and `identity_bearer` carry different bearers; "
             "both sessions of one ceremony must use the same token"
         )
-    user_id, blinder_id = opened(witness, "id")
-    handle, blinder_handle = opened(witness, "handle")
+    user_id, blinder_id, id_commitment = opened(witness, "id")
+    handle, blinder_handle, handle_commitment = opened(witness, "handle")
 
     max_bearer = identity_table.integer("MAX_BEARER_LEN", identity_table.LIB)
     if len(bearer) > max_bearer:
@@ -98,12 +99,9 @@ def main() -> int:
     handle_tag = identity_table.byte_array(f"HANDLE_TAG_{suffix}")
     folded = identity_table.fold(handle)
 
-    def commitment(entry) -> bytes:
-        return bytes.fromhex(entry["commitment"].removeprefix("0x"))
-
     lines = [
         f"# Written by scripts/identity-link-witness.py from {source_label(args.witness)}:",
-        f"# a synthetic {witness['platform']} ceremony witness. scripts/check-verifiers.sh proves it.",
+        f"# a synthetic {platform} ceremony witness. scripts/check-verifiers.sh proves it.",
         f"bearer = {toml_array(identity_table.padded('token_bearer', bearer, max_bearer))}",
         f'bearer_len = "{len(bearer)}"',
         f"blinder_token = {toml_array(blinder_token)}",
@@ -114,10 +112,10 @@ def main() -> int:
         f"handle = {toml_array(identity_table.padded('handle', handle, max_handle))}",
         f'handle_len = "{len(handle)}"',
         f"blinder_handle = {toml_array(blinder_handle)}",
-        f"token_commitment = {toml_array(identity_table.halves(commitment(witness['token_bearer'])))}",
-        f"identity_commitment = {toml_array(identity_table.halves(commitment(witness['identity_bearer'])))}",
-        f"id_commitment = {toml_array(identity_table.halves(commitment(witness['id'])))}",
-        f"handle_commitment = {toml_array(identity_table.halves(commitment(witness['handle'])))}",
+        f"token_commitment = {toml_array(identity_table.halves(token_commitment))}",
+        f"identity_commitment = {toml_array(identity_table.halves(identity_commitment))}",
+        f"id_commitment = {toml_array(identity_table.halves(id_commitment))}",
+        f"handle_commitment = {toml_array(identity_table.halves(handle_commitment))}",
         f"id_node = {toml_array(identity_table.halves(hashlib.sha256(id_tag + user_id).digest()))}",
         f"handle_node = {toml_array(identity_table.halves(hashlib.sha256(handle_tag + folded).digest()))}",
         f'id_tag = "{identity_table.packed_tag(id_tag)}"',
