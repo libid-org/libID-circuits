@@ -38,9 +38,14 @@ def synthetic_witness(path: pathlib.Path) -> dict:
 
 def opened(witness: dict, name: str) -> tuple[bytes, bytes, bytes]:
     """The entry's value, blinder and the commitment they open."""
-    entry = witness[name]
+    entry = witness.get(name)
+    if not isinstance(entry, dict) or not {"value", "blinder", "commitment"} <= entry.keys():
+        raise SystemExit(f"witness entry `{name}` needs value, blinder and commitment")
     value = entry["value"].encode()
     blinder = bytes.fromhex(entry["blinder"].removeprefix("0x"))
+    width = identity_table.integer("BLINDER_LEN", identity_table.LIB)
+    if len(blinder) != width:
+        raise SystemExit(f"witness entry `{name}`: the blinder is {len(blinder)} bytes; the circuit takes {width}")
     commitment = hashlib.sha256(value + blinder).digest()
     if "0x" + commitment.hex() != entry["commitment"]:
         raise SystemExit(

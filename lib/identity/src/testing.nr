@@ -19,3 +19,12 @@ pub fn padded<let N: u32, let M: u32>(value: [u8; M]) -> [u8; N] {
     }
     out
 }
+
+/// A tag as bearer-link's public input: its bytes from the top of a Field.
+pub fn packed_tag<let N: u32>(tag: [u8; N]) -> Field {
+    let mut packed: Field = 0;
+    for i in 0..31 {
+        packed = packed * 256 + if i < N { tag[i] as Field } else { 0 };
+    }
+    packed
+}

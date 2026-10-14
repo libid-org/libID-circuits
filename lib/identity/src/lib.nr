@@ -14,7 +14,7 @@ pub global BLINDER_LEN: u32 = 16;
 /// The widest tag a public input carries: one Field holds 31 bytes.
 pub global MAX_TAG_LEN: u32 = 31;
 
-/// bearer-link's buffers: GitHub's 39-byte login, and 2^64-1's 20 digits.
+/// bearer-link's buffers: GitHub's 39-byte login, and 20 id digits.
 pub global MAX_HANDLE_BEARER_LINK: u32 = 39;
 pub global MAX_ID_BEARER_LINK: u32 = 20;
 
@@ -95,6 +95,7 @@ pub fn fixed_node_halves<let TAG: u32, let MAX: u32>(
     for i in 0..MAX {
         preimage[TAG + i] = value[i];
     }
+    assert(len <= MAX, "value longer than its buffer");
     halves(sha256_var(preimage, TAG + len))
 }
 
@@ -107,6 +108,7 @@ pub fn node_halves<let MAX: u32>(
     len: u32,
 ) -> [Field; 2] {
     assert(tag_len <= MAX_TAG_LEN, "tag longer than a Field");
+    assert(len <= MAX, "value longer than its buffer");
     let mut preimage: [u8; MAX_TAG_LEN + MAX] = [0; MAX_TAG_LEN + MAX];
     for i in 0..MAX_TAG_LEN {
         preimage[i] = tag[i];

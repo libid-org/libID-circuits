@@ -67,21 +67,12 @@ fn main(
 
 // --- Tests ----------------------------------------------------------------
 
-use libid_identity::testing::{blinder, padded};
+use libid_identity::{table, testing::{blinder, packed_tag, padded}};
 
 // Expected values are Python hashlib's over: blinders bytes(0..16) to
 // (48..64); X: bearer "tok-123", id "2244994945", handle "Al_1" (node of
 // "al_1"); GitHub: bearer "gho_tok", id "583231", login "Octo-Cat" (node of
-// "octo-cat"). A tag is int.from_bytes(tag.ljust(31, b"\0"), "big").
-
-global X_ID_TAG: Field =
-    191546819536254810228321837694468608663695868649036732363827352603837071360;
-global X_HANDLE_TAG: Field =
-    191546819536254810227069963542963682822352149726751247095476095263271026688;
-global GITHUB_ID_TAG: Field =
-    191546819536254704964168253431085560162265554388806175972357443242539614208;
-global GITHUB_HANDLE_TAG: Field =
-    191546819536254704964168253431084421589357474178696061806300664570195214336;
+// "octo-cat"). The tags are the table's, so a changed tag fails the nodes.
 
 struct Case {
     bearer: [u8; MAX_BEARER_LEN],
@@ -131,10 +122,10 @@ fn x() -> Case {
             169904273960443994800052718057341968900,
             182742246427322026301030621552550382480,
         ],
-        id_tag: X_ID_TAG,
-        id_tag_len: 15,
-        handle_tag: X_HANDLE_TAG,
-        handle_tag_len: 14,
+        id_tag: packed_tag(table::USER_ID_TAG_X),
+        id_tag_len: table::USER_ID_TAG_X.len(),
+        handle_tag: packed_tag(table::HANDLE_TAG_X),
+        handle_tag_len: table::HANDLE_TAG_X.len(),
     }
 }
 
@@ -167,10 +158,10 @@ fn github() -> Case {
             79778013590199783157327299585846572160,
             144831525398659596121816034652479840622,
         ],
-        id_tag: GITHUB_ID_TAG,
-        id_tag_len: 20,
-        handle_tag: GITHUB_HANDLE_TAG,
-        handle_tag_len: 19,
+        id_tag: packed_tag(table::USER_ID_TAG_GITHUB),
+        id_tag_len: table::USER_ID_TAG_GITHUB.len(),
+        handle_tag: packed_tag(table::HANDLE_TAG_GITHUB),
+        handle_tag_len: table::HANDLE_TAG_GITHUB.len(),
     }
 }
 
@@ -234,25 +225,25 @@ fn the_node_of_the_unfolded_handle_is_refused() {
 #[test(should_fail_with = "id node mismatch")]
 fn another_platform_s_tags_are_refused() {
     let mut c = x();
-    c.id_tag = GITHUB_ID_TAG;
-    c.id_tag_len = 20;
-    c.handle_tag = GITHUB_HANDLE_TAG;
-    c.handle_tag_len = 19;
+    c.id_tag = packed_tag(table::USER_ID_TAG_GITHUB);
+    c.id_tag_len = table::USER_ID_TAG_GITHUB.len();
+    c.handle_tag = packed_tag(table::HANDLE_TAG_GITHUB);
+    c.handle_tag_len = table::HANDLE_TAG_GITHUB.len();
     run(c);
 }
 
 #[test(should_fail_with = "id node mismatch")]
 fn the_handle_tag_in_the_id_position_is_refused() {
     let mut c = x();
-    c.id_tag = X_HANDLE_TAG;
-    c.id_tag_len = 14;
+    c.id_tag = packed_tag(table::HANDLE_TAG_X);
+    c.id_tag_len = table::HANDLE_TAG_X.len();
     run(c);
 }
 
 #[test(should_fail_with = "handle node mismatch")]
 fn a_tag_one_byte_short_is_refused() {
     let mut c = x();
-    c.handle_tag_len = 13;
+    c.handle_tag_len = table::HANDLE_TAG_X.len() - 1;
     run(c);
 }
 
