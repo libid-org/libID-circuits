@@ -129,9 +129,11 @@ jobs:
           python3 scripts/google-fixture-witness.py --out "$RUNNER_TEMP/oidc-google.Prover.toml"
           diff -u circuits/oidc-google/Prover.toml "$RUNNER_TEMP/oidc-google.Prover.toml"
           for platform in x github; do
+            toml="Prover.toml"
+            [[ "$platform" == x ]] || toml="Prover-$platform.toml"
             python3 scripts/identity-link-witness.py "fixtures/$platform-identity-link-witness.json" \
-              --out "$RUNNER_TEMP/bearer-link-$platform.Prover.toml"
-            diff -u "circuits/bearer-link-$platform/Prover.toml" "$RUNNER_TEMP/bearer-link-$platform.Prover.toml"
+              --out "$RUNNER_TEMP/$toml"
+            diff -u "circuits/bearer-link/$toml" "$RUNNER_TEMP/$toml"
           done
 
       # Full build: proves every circuit compiles, every vk generates, and

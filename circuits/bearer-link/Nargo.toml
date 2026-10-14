@@ -1,5 +1,5 @@
 [package]
-name = "bearer_link_github"
+name = "bearer_link"
 type = "bin"
 authors = ["libID"]
 compiler_version = ">=1.0.0"

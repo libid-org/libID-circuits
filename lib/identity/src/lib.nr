@@ -11,32 +11,16 @@ use sha256::sha256_var;
 /// Blinder width of a tlsn hash commitment.
 pub global BLINDER_LEN: u32 = 16;
 
-/// What a platform allows in a handle. `bytes` maps a raw byte to its fold, or 0 if refused.
-pub struct HandleRules {
-    pub max_len: u32,
-    pub allow_hyphen: bool,
-    pub is_email: bool,
-    pub bytes: [u8; 256],
-}
+/// The widest tag a public input carries: one Field holds 31 bytes.
+pub global MAX_TAG_LEN: u32 = 31;
 
-/// What a platform allows in an id. `bytes[b]` says whether `b` may appear;
-/// when `bounded`, an id as long as `max_len` may not exceed `max`'s digits.
-pub struct IdRules {
-    pub max_len: u32,
-    pub leading_zero: bool,
-    pub nonzero: bool,
-    pub bounded: bool,
-    pub max: [u8; ID_BOUND_LEN],
-    pub bytes: [bool; 256],
-}
+/// bearer-link's buffers: GitHub's 39-byte login, and 2^64-1's 20 digits.
+pub global MAX_HANDLE_BEARER_LINK: u32 = 39;
+pub global MAX_ID_BEARER_LINK: u32 = 20;
 
-/// The width of `IdRules.max`: 2^64-1 has 20 digits.
-pub global ID_BOUND_LEN: u32 = 20;
-
-/// Each circuit's bearer cap, the opening's main cost (REQ-PLAT-30/36 allow 4096).
+/// The bearer cap, the opening's main cost (REQ-PLAT-30/36 allow 4096).
 /// A live X bearer measured 91 bytes, a GitHub `gho_` token is 40.
-pub global MAX_BEARER_LEN_X: u32 = 128;
-pub global MAX_BEARER_LEN_GITHUB: u32 = 128;
+pub global MAX_BEARER_LEN: u32 = 128;
 
 /// An opened bearer: nonempty, printable ASCII (REQ-PLAT-30, REQ-PLAT-36,
 /// REQ-COMMON-20). No CR or LF, so REQ-COMMON-37 holds. The tail is not read.
@@ -73,21 +57,39 @@ pub fn hash_commit<let MAX_PLAIN: u32, let TOTAL: u32>(
     sha256_var(input, plaintext_len + BLINDER_LEN)
 }
 
-/// `SHA256(tag || value[0..len])`, the node of a checked value. `TOTAL` is `TAG + MAX`.
-pub fn tagged_hash<let TAG: u32, let MAX: u32, let TOTAL: u32>(
-    tag: [u8; TAG],
+/// `SHA256(tag[0..tag_len] || value[0..len])`, the node of a checked value.
+/// `TOTAL` is `MAX_TAG_LEN + MAX`.
+pub fn tagged_hash<let MAX: u32, let TOTAL: u32>(
+    tag: [u8; MAX_TAG_LEN],
+    tag_len: u32,
     value: [u8; MAX],
     len: u32,
 ) -> [u8; 32] {
-    assert(TOTAL == TAG + MAX, "TOTAL must equal TAG + MAX");
+    assert(TOTAL == MAX_TAG_LEN + MAX, "TOTAL must equal MAX_TAG_LEN + MAX");
+    assert(tag_len <= MAX_TAG_LEN, "tag longer than a Field");
     let mut preimage: [u8; TOTAL] = [0; TOTAL];
-    for i in 0..TAG {
+    for i in 0..MAX_TAG_LEN {
         preimage[i] = tag[i];
     }
     for i in 0..MAX {
-        preimage[TAG + i] = value[i];
+        preimage[tag_len + i] = value[i];
     }
-    sha256_var(preimage, TAG + len)
+    sha256_var(preimage, tag_len + len)
+}
+
+/// A tag as a public input carries it: its bytes big-endian from the top of
+/// the Field, zero past its length.
+pub fn tag_bytes(packed: Field) -> [u8; MAX_TAG_LEN] {
+    packed.to_be_bytes()
+}
+
+/// A compiled tag in the shape `tagged_hash` takes.
+pub fn tag_of<let N: u32>(tag: [u8; N]) -> ([u8; MAX_TAG_LEN], u32) {
+    let mut out: [u8; MAX_TAG_LEN] = [0; MAX_TAG_LEN];
+    for i in 0..N {
+        out[i] = tag[i];
+    }
+    (out, N)
 }
 
 /// A 32-byte value as two big-endian 16-byte Fields, `[high, low]`.
@@ -101,101 +103,89 @@ pub fn halves(digest: [u8; 32]) -> [Field; 2] {
     [high, low]
 }
 
-/// A node as the public inputs carry it: `halves(SHA256(tag || value[0..len]))`.
-/// The caller checks `value` first.
-pub fn node_halves<let TAG: u32, let MAX: u32>(
+/// A node under a compiled tag, hashed over `TAG + MAX` bytes rather than
+/// `MAX_TAG_LEN + MAX`, so a short value keeps to fewer SHA-256 blocks.
+pub fn fixed_node_halves<let TAG: u32, let MAX: u32>(
     tag: [u8; TAG],
     value: [u8; MAX],
     len: u32,
 ) -> [Field; 2] {
-    halves(tagged_hash::<TAG, MAX, TAG + MAX>(tag, value, len))
+    let mut preimage: [u8; TAG + MAX] = [0; TAG + MAX];
+    for i in 0..TAG {
+        preimage[i] = tag[i];
+    }
+    for i in 0..MAX {
+        preimage[TAG + i] = value[i];
+    }
+    halves(sha256_var(preimage, TAG + len))
 }
 
-/// Check a handle as the platform sent it and return it folded, zero past `len`.
-/// Refuses, never repairs; checks run in every language's order: empty, too
-/// long, byte, shape.
-pub fn normalize_handle<let MAX: u32>(raw: [u8; MAX], len: u32, rules: HandleRules) -> [u8; MAX] {
-    assert(len != 0, "handle is empty");
-    assert((len <= MAX) & (len <= rules.max_len), "handle too long");
+/// A node as the public inputs carry it. The caller checks `value` first.
+pub fn node_halves<let MAX: u32>(
+    tag: [u8; MAX_TAG_LEN],
+    tag_len: u32,
+    value: [u8; MAX],
+    len: u32,
+) -> [Field; 2] {
+    halves(
+        tagged_hash::<MAX, MAX_TAG_LEN + MAX>(tag, tag_len, value, len),
+    )
+}
 
+/// A byte of a JSON string as sent: printable ASCII, not `"` or `\`. A value
+/// of such bytes between revealed quotes is exactly one string.
+fn is_string_byte(b: u8) -> bool {
+    (b >= 0x20) & (b <= 0x7e) & (b != 0x22) & (b != 0x5c)
+}
+
+/// A handle as sent, folded A-Z to a-z, zero past `len`.
+pub fn fold_handle<let MAX: u32>(raw: [u8; MAX], len: u32) -> [u8; MAX] {
+    assert(len != 0, "handle is empty");
+    assert(len <= MAX, "handle too long");
     let mut out: [u8; MAX] = [0; MAX];
-    let mut ats: u32 = 0;
-    let mut at: u32 = 0;
-    let mut doubled = false;
-    let mut previous_hyphen = false;
     for i in 0..MAX {
         let b = raw[i];
         if i < len {
-            let c = rules.bytes[b as u32];
-            assert(c != 0, "handle byte not allowed");
-            out[i] = c;
-            if c == 0x40 {
-                ats += 1;
-                at = i;
-            }
-            let hyphen = c == 0x2d;
-            if hyphen & previous_hyphen {
-                doubled = true;
-            }
-            previous_hyphen = hyphen;
+            assert(is_string_byte(b), "handle byte not allowed");
+            out[i] = if (b >= 0x41) & (b <= 0x5a) {
+                b + 0x20
+            } else {
+                b
+            };
         }
-    }
-
-    if rules.is_email {
-        assert((ats == 1) & (at != 0) & (at != len - 1), "handle shape not allowed");
-    } else if rules.allow_hyphen {
-        assert((out[0] != 0x2d) & (out[len - 1] != 0x2d) & !doubled, "handle shape not allowed");
     }
     out
 }
 
-/// Check an id exactly as the platform sent it. Ids are never folded.
-pub fn check_id<let MAX: u32>(raw: [u8; MAX], len: u32, rules: IdRules) {
+/// An id as sent, never folded: decimal digits, or a JSON string's bytes.
+pub fn check_id<let MAX: u32>(raw: [u8; MAX], len: u32, digits: bool) {
     assert(len != 0, "id is empty");
-    assert((len <= MAX) & (len <= rules.max_len), "id too long");
+    assert(len <= MAX, "id too long");
     for i in 0..MAX {
         let b = raw[i];
         if i < len {
-            assert(rules.bytes[b as u32], "id byte not allowed");
+            let ok = if digits {
+                (b >= 0x30) & (b <= 0x39)
+            } else {
+                is_string_byte(b)
+            };
+            assert(ok, "id byte not allowed");
         }
-    }
-    if !rules.leading_zero {
-        assert((len == 1) | (raw[0] != 0x30), "id shape not allowed");
-    }
-    if rules.nonzero {
-        assert((len != 1) | (raw[0] != 0x30), "id shape not allowed");
-    }
-    // Equal-length digit strings order as their numbers do.
-    let mut above = false;
-    let mut decided = false;
-    for i in 0..ID_BOUND_LEN {
-        if (i < MAX) & (i < len) & !decided {
-            let (b, m) = (raw[i], rules.max[i]);
-            above = b > m;
-            decided = b != m;
-        }
-    }
-    if rules.bounded & (len == rules.max_len) {
-        assert(!above, "id shape not allowed");
     }
 }
 
-/// The bearer-link relation: one bearer opens both bearer commitments, the raw
-/// id and handle open theirs and meet the rules, and the nodes are
-/// SHA256(id_tag || id) and SHA256(handle_tag || fold(handle)).
-pub fn identity_link<let ID_TAG: u32, let HANDLE_TAG: u32, let MAX_BEARER: u32, let MAX_ID: u32, let MAX_HANDLE: u32>(
-    id_tag: [u8; ID_TAG],
-    handle_tag: [u8; HANDLE_TAG],
-    id_rules: IdRules,
-    handle_rules: HandleRules,
-    bearer: [u8; MAX_BEARER],
+/// The bearer-link relation: one bearer opens both bearer commitments, the id
+/// and handle open theirs, and the nodes are `SHA256(id_tag || id)` and
+/// `SHA256(handle_tag || fold(handle))` under the tags the verifier passes.
+pub fn identity_link(
+    bearer: [u8; MAX_BEARER_LEN],
     bearer_len: u32,
     blinder_token: [u8; BLINDER_LEN],
     blinder_identity: [u8; BLINDER_LEN],
-    id: [u8; MAX_ID],
+    id: [u8; MAX_ID_BEARER_LINK],
     id_len: u32,
     blinder_id: [u8; BLINDER_LEN],
-    handle: [u8; MAX_HANDLE],
+    handle: [u8; MAX_HANDLE_BEARER_LINK],
     handle_len: u32,
     blinder_handle: [u8; BLINDER_LEN],
     token_commitment: [Field; 2],
@@ -204,11 +194,15 @@ pub fn identity_link<let ID_TAG: u32, let HANDLE_TAG: u32, let MAX_BEARER: u32, 
     handle_commitment: [Field; 2],
     id_node: [Field; 2],
     handle_node: [Field; 2],
+    id_tag: Field,
+    id_tag_len: u32,
+    handle_tag: Field,
+    handle_tag_len: u32,
 ) {
     // 1. The bearer link.
     constrain_bearer(bearer, bearer_len);
     assert(
-        halves(hash_commit::<MAX_BEARER, MAX_BEARER + BLINDER_LEN>(
+        halves(hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(
             bearer,
             bearer_len,
             blinder_token,
@@ -217,7 +211,7 @@ pub fn identity_link<let ID_TAG: u32, let HANDLE_TAG: u32, let MAX_BEARER: u32, 
         "token bearer commitment mismatch",
     );
     assert(
-        halves(hash_commit::<MAX_BEARER, MAX_BEARER + BLINDER_LEN>(
+        halves(hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(
             bearer,
             bearer_len,
             blinder_identity,
@@ -226,18 +220,20 @@ pub fn identity_link<let ID_TAG: u32, let HANDLE_TAG: u32, let MAX_BEARER: u32, 
         "identity bearer commitment mismatch",
     );
 
-    // 2-3. The raw values, checked as the platform sent them.
-    check_id(id, id_len, id_rules);
-    let folded = normalize_handle(handle, handle_len, handle_rules);
+    // 2. The values as sent: whole JSON tokens, so no commitment runs past one.
+    check_id(id, id_len, true);
+    let folded = fold_handle(handle, handle_len);
     assert(
-        halves(
-            hash_commit::<MAX_ID, MAX_ID + BLINDER_LEN>(id, id_len, blinder_id),
-        )
+        halves(hash_commit::<MAX_ID_BEARER_LINK, MAX_ID_BEARER_LINK + BLINDER_LEN>(
+            id,
+            id_len,
+            blinder_id,
+        ))
             == id_commitment,
         "id commitment mismatch",
     );
     assert(
-        halves(hash_commit::<MAX_HANDLE, MAX_HANDLE + BLINDER_LEN>(
+        halves(hash_commit::<MAX_HANDLE_BEARER_LINK, MAX_HANDLE_BEARER_LINK + BLINDER_LEN>(
             handle,
             handle_len,
             blinder_handle,
@@ -246,7 +242,10 @@ pub fn identity_link<let ID_TAG: u32, let HANDLE_TAG: u32, let MAX_BEARER: u32, 
         "handle commitment mismatch",
     );
 
-    // 4. The keys.
-    assert(node_halves(id_tag, id, id_len) == id_node, "id node mismatch");
-    assert(node_halves(handle_tag, folded, handle_len) == handle_node, "handle node mismatch");
+    // 3. The keys.
+    assert(node_halves(tag_bytes(id_tag), id_tag_len, id, id_len) == id_node, "id node mismatch");
+    assert(
+        node_halves(tag_bytes(handle_tag), handle_tag_len, folded, handle_len) == handle_node,
+        "handle node mismatch",
+    );
 }

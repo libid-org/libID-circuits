@@ -16,11 +16,11 @@
 #                   consumer is an EVM Solidity verifier)
 #   vk_hash         32-byte hash of the vk, as written by the same command
 #   <Contract>.sol  the EVM Solidity verifier bb derives from the vk, the
-#                   contract named after the circuit (bearer-link-x ->
-#                   BearerLinkXHonkVerifier); see scripts/gen-verifier.sh.
+#                   contract named after the circuit (bearer-link ->
+#                   BearerLinkHonkVerifier); see scripts/gen-verifier.sh.
 #                   Ships so that consumers compile it and never run bb.
-#   handles-table.nr  lib/identity's generated table.nr, the circuit's rules
-#                     and tags
+#   handles-table.nr  lib/identity's generated table.nr, the circuit's tags
+#                     and buffers
 #
 # and <out>/commit: the circuits commit built, with `-dirty` when the tree has
 # modified or untracked files, or `unknown` outside a readable git work tree.
@@ -125,7 +125,7 @@ for dir in "$ROOT"/circuits/*/; do
   # names, so a renamed directory fails here instead of at a consumer.
   "$ROOT/scripts/gen-verifier.sh" "$circuit" --artifacts "$OUT"
 
-  # Ship the table the circuit's rules and tags come from, for consumers to
+  # Ship the table the circuit's tags and buffers come from, for consumers to
   # compare with their handles.json.
   cp "$TABLE" "$OUT/$circuit/handles-table.nr"
 done

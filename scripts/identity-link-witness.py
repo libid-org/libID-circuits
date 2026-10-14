@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write a bearer-link-x or bearer-link-github Prover.toml from a synthetic
+"""Write a bearer-link Prover.toml from a synthetic X or GitHub
 witness such as fixtures/*-identity-link-witness.json. Public inputs are
 computed with hashlib, independently of the circuit.
 
@@ -19,7 +19,7 @@ sys.dont_write_bytecode = True
 import identity_table  # noqa: E402  (beside this script)
 
 
-# circuits/bearer-link-<platform>
+# The platforms bearer-link proves.
 PLATFORMS = ("x", "github")
 
 
@@ -86,14 +86,14 @@ def main() -> int:
     user_id, blinder_id = opened(witness, "id")
     handle, blinder_handle = opened(witness, "handle")
 
-    max_bearer = identity_table.integer(f"MAX_BEARER_LEN_{suffix}", identity_table.LIB)
+    max_bearer = identity_table.integer("MAX_BEARER_LEN", identity_table.LIB)
     if len(bearer) > max_bearer:
         raise SystemExit(
-            f"{args.witness}: the bearer is {len(bearer)} bytes; the bearer-link-{platform} circuit "
-            f"caps it at {max_bearer} (MAX_BEARER_LEN_{suffix} in lib/identity/src/lib.nr)"
+            f"{args.witness}: the bearer is {len(bearer)} bytes; the bearer-link circuit "
+            f"caps it at {max_bearer} (MAX_BEARER_LEN in lib/identity/src/lib.nr)"
         )
-    max_id = identity_table.integer(f"MAX_ID_{suffix}")
-    max_handle = identity_table.integer(f"MAX_HANDLE_{suffix}")
+    max_id = identity_table.integer("MAX_ID_BEARER_LINK", identity_table.LIB)
+    max_handle = identity_table.integer("MAX_HANDLE_BEARER_LINK", identity_table.LIB)
     id_tag = identity_table.byte_array(f"USER_ID_TAG_{suffix}")
     handle_tag = identity_table.byte_array(f"HANDLE_TAG_{suffix}")
     folded = identity_table.fold(handle)
@@ -120,6 +120,10 @@ def main() -> int:
         f"handle_commitment = {toml_array(identity_table.halves(commitment(witness['handle'])))}",
         f"id_node = {toml_array(identity_table.halves(hashlib.sha256(id_tag + user_id).digest()))}",
         f"handle_node = {toml_array(identity_table.halves(hashlib.sha256(handle_tag + folded).digest()))}",
+        f'id_tag = "{identity_table.packed_tag(id_tag)}"',
+        f'id_tag_len = "{len(id_tag)}"',
+        f'handle_tag = "{identity_table.packed_tag(handle_tag)}"',
+        f'handle_tag_len = "{len(handle_tag)}"',
     ]
     text = "\n".join(lines) + "\n"
     if args.out is None:

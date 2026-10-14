@@ -2,12 +2,11 @@ use bignum::params::BigNumParams;
 use bignum::RuntimeBigNum;
 use libid_identity::{
     check_id,
+    fixed_node_halves,
+    fold_handle,
     halves,
-    node_halves,
-    normalize_handle,
     table::{
-        HANDLE_RULES_GOOGLE, HANDLE_TAG_GOOGLE, ID_RULES_GOOGLE, MAX_HANDLE_GOOGLE, MAX_ID_GOOGLE,
-        USER_ID_TAG_GOOGLE,
+        HANDLE_TAG_GOOGLE, ID_DECIMAL_GOOGLE, MAX_HANDLE_GOOGLE, MAX_ID_GOOGLE, USER_ID_TAG_GOOGLE,
     },
 };
 use noir_base64::BASE64_URL_ENCODER;
@@ -140,9 +139,9 @@ fn main(
             assert(payload_json[email_offset + EMAIL_PREFIX_LEN + i] == email_bytes[i]);
         }
     }
-    // Check the address against Google's rules and fold it. The rules allow
-    // no `"`, so the value cannot run past its closing quote.
-    let folded = normalize_handle(email_bytes, email_len, HANDLE_RULES_GOOGLE);
+    // Fold the address. Its bytes may hold no `"`, so the value cannot run
+    // past its closing quote.
+    let folded = fold_handle(email_bytes, email_len);
     assert(payload_json[email_offset + EMAIL_PREFIX_LEN + email_len] == 34); // closing `"`
     assert_structural(
         payload_json[email_offset + EMAIL_PREFIX_LEN + email_len + 1],
@@ -185,10 +184,13 @@ fn main(
     }
     // REQ-PLAT-04: 1-31 bytes of printable ASCII without `"` or `\`.
     // Only the node leaves the circuit, so no later role can check these bytes.
-    check_id(sub_bytes, sub_len, ID_RULES_GOOGLE);
+    check_id(sub_bytes, sub_len, ID_DECIMAL_GOOGLE);
     assert(payload_json[sub_offset + SUB_PREFIX_LEN + sub_len] == 34); // closing `"`
     assert_structural(payload_json[sub_offset + SUB_PREFIX_LEN + sub_len + 1]);
-    assert(node_halves(USER_ID_TAG_GOOGLE, sub_bytes, sub_len) == id_node, "id node mismatch");
+    assert(
+        fixed_node_halves(USER_ID_TAG_GOOGLE, sub_bytes, sub_len) == id_node,
+        "id node mismatch",
+    );
 
     // 6. `email_verified`:true must be present in the payload.
     //    Pattern bytes: `"email_verified":true`
@@ -282,7 +284,7 @@ fn main(
 
     // 9b. The handle node.
     assert(
-        node_halves(HANDLE_TAG_GOOGLE, folded, email_len) == handle_node,
+        fixed_node_halves(HANDLE_TAG_GOOGLE, folded, email_len) == handle_node,
         "handle node mismatch",
     );
 
@@ -381,7 +383,7 @@ fn nonce_encoding_matches_external_vectors() {
 fn the_id_node_matches_an_independent_vector() {
     // hashlib.sha256(b"libid.google.user-id" + b"123456789012345678901")
     let sub: [u8; SUB_MAX] = padded("123456789012345678901".as_bytes());
-    let got = node_halves(USER_ID_TAG_GOOGLE, sub, 21);
+    let got = fixed_node_halves(USER_ID_TAG_GOOGLE, sub, 21);
     assert(got == [0xa83e66b34468315fb68c3098b3c521b7, 0x49aafb1db3390cb53ec03a8db139f2c7]);
 }
 
@@ -390,11 +392,11 @@ fn the_id_node_covers_the_shortest_and_longest_sub() {
     // One byte, and all 31: the tag plus the longest `sub` still fits the
     // single block the length comment on SUB_MAX promises.
     let sub: [u8; SUB_MAX] = padded("1".as_bytes());
-    let got = node_halves(USER_ID_TAG_GOOGLE, sub, 1);
+    let got = fixed_node_halves(USER_ID_TAG_GOOGLE, sub, 1);
     assert(got == [0xc752bfa22abd3d9fe95704ee7a136e33, 0xf47e48605233e3b6c1e9e65ea60eaf99]);
     // "!" followed by thirty "~": the lowest and highest printable bytes.
     let sub: [u8; SUB_MAX] = padded("!~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~".as_bytes());
-    let got = node_halves(USER_ID_TAG_GOOGLE, sub, SUB_MAX);
+    let got = fixed_node_halves(USER_ID_TAG_GOOGLE, sub, SUB_MAX);
     assert(got == [0x8f656d800bef67cbaa34852bb16202c6, 0x4189a0ab5ae94d9ecc9d82c830989dcf]);
 }
 
@@ -415,9 +417,9 @@ fn dirty<let N: u32>(value: [u8; N], len: u32) -> [u8; N] {
 fn bytes_past_email_len_leave_the_handle_node() {
     // hashlib.sha256(b"libid.google.handle" + b"fixture@example.com")
     let email: [u8; EMAIL_MAX] = dirty(padded("Fixture@Example.com".as_bytes()), 19);
-    let folded = normalize_handle(email, 19, HANDLE_RULES_GOOGLE);
+    let folded = fold_handle(email, 19);
     assert(
-        node_halves(HANDLE_TAG_GOOGLE, folded, 19)
+        fixed_node_halves(HANDLE_TAG_GOOGLE, folded, 19)
             == [0xfbda24950a7bc55993b7aacc3acbde63, 0x6931dbb45f04c1ff6f6909027962885f],
     );
 }
@@ -426,9 +428,9 @@ fn bytes_past_email_len_leave_the_handle_node() {
 fn bytes_past_sub_len_leave_the_id_node() {
     // hashlib.sha256(b"libid.google.user-id" + b"123456789012345678901")
     let sub: [u8; SUB_MAX] = dirty(padded("123456789012345678901".as_bytes()), 21);
-    check_id(sub, 21, ID_RULES_GOOGLE);
+    check_id(sub, 21, ID_DECIMAL_GOOGLE);
     assert(
-        node_halves(USER_ID_TAG_GOOGLE, sub, 21)
+        fixed_node_halves(USER_ID_TAG_GOOGLE, sub, 21)
             == [0xa83e66b34468315fb68c3098b3c521b7, 0x49aafb1db3390cb53ec03a8db139f2c7],
     );
 }
@@ -448,7 +450,7 @@ fn bytes_past_audience_len_leave_the_audience_hash() {
     );
 }
 
-// `check_id` under ID_RULES_GOOGLE; the table's vectors cover `"`, `\` and tab.
+// `check_id` under ID_DECIMAL_GOOGLE; the table's vectors cover `"`, `\` and tab.
 
 fn sub_with(byte: u8) -> [u8; SUB_MAX] {
     let mut sub: [u8; SUB_MAX] = padded("1".as_bytes());
@@ -461,19 +463,19 @@ fn every_printable_sub_byte_but_quote_and_backslash_is_accepted() {
     for b in 0x20..0x7f {
         let byte = b as u8;
         if (byte != 0x22) & (byte != 0x5c) {
-            check_id(sub_with(byte), 2, ID_RULES_GOOGLE);
+            check_id(sub_with(byte), 2, ID_DECIMAL_GOOGLE);
         }
     }
 }
 
 #[test(should_fail_with = "id byte not allowed")]
 fn delete_in_sub_is_refused() {
-    check_id(sub_with(0x7f), 2, ID_RULES_GOOGLE);
+    check_id(sub_with(0x7f), 2, ID_DECIMAL_GOOGLE);
 }
 
 #[test(should_fail_with = "id byte not allowed")]
 fn a_non_ascii_byte_in_sub_is_refused() {
-    check_id(sub_with(0x80), 2, ID_RULES_GOOGLE);
+    check_id(sub_with(0x80), 2, ID_DECIMAL_GOOGLE);
 }
 
 #[test]

@@ -20,9 +20,8 @@ support, which fits libID's client-side proving use case almost perfectly.
 
 | Circuit | Package | Proves |
 |---|---|---|
-| `circuits/bearer-link-x` | `bearer_link_x` | X's bearer link plus the account as keys. The identity response reveals only the anchors around `id` and `username`; the circuit opens the two committed values as X sent them, checks them against X's rules, folds the handle, and outputs `idNode = SHA256("libid.x.user-id" \|\| id)` and `handleNode = SHA256("libid.x.handle" \|\| fold(handle))`. 12 public inputs: the two bearer commitments, the id and handle commitments and the two nodes, each as two 16-byte halves. Neither value appears in plaintext; see the note below the table. The bearer is at most 128 bytes. |
-| `circuits/bearer-link-github` | `bearer_link_github` | The same relation for GitHub: the bearer link, and the committed `id` (a JSON integer, its digits alone) and `login` opened, checked against GitHub's rules, the login folded, and output as `SHA256("libid.github.user-id" \|\| id)` and `SHA256("libid.github.handle" \|\| fold(login))`. The same 12 public inputs. The bearer is at most 128 bytes; a `gho_` token is 40. |
-| `circuits/oidc-google` | `oidc_google` | Possession of a Google OIDC JWT: verifies the RSASSA-PKCS1-v1_5 signature over `header.payload` and exposes the Authorization Digest carried in `nonce`, `SHA256(aud)`, the id node `SHA256("libid.google.user-id" \|\| sub)`, the handle node `SHA256("libid.google.handle" \|\| fold(email))` (the `sub` and the address are not disclosed; the address is checked against the Google rules and folded in the circuit), `exp`, and the modulus that verified. The Platform Verifier alone decides whether that modulus is trusted. |
+| `circuits/bearer-link` | `bearer_link` | X's and GitHub's bearer link plus the account as keys. The identity response reveals only the anchors around the id and the handle; the circuit opens the two committed values as the platform sent them, checks that each is one whole JSON token (an id of digits, a handle of printable ASCII without `"` or `\`), folds the handle, and outputs `idNode = SHA256(idTag \|\| id)` and `handleNode = SHA256(handleTag \|\| fold(handle))` under the tags the verifier passes. 16 public inputs: the two bearer commitments, the id and handle commitments and the two nodes, each as two 16-byte halves, then each tag as one Field with its length. Neither value appears in plaintext; see the note below the table. The bearer is at most 128 bytes, the handle 39, the id 20 digits. |
+| `circuits/oidc-google` | `oidc_google` | Possession of a Google OIDC JWT: verifies the RSASSA-PKCS1-v1_5 signature over `header.payload` and exposes the Authorization Digest carried in `nonce`, `SHA256(aud)`, the id node `SHA256("libid.google.user-id" \|\| sub)`, the handle node `SHA256("libid.google.handle" \|\| fold(email))` (the `sub` and the address are not disclosed; each is checked to be one JSON string and the address is folded in the circuit), `exp`, and the modulus that verified. The Platform Verifier alone decides whether that modulus is trusted. |
 
 A node is an unsalted tagged SHA-256, so anyone can hash a guess and compare.
 The id and handle are not disclosed, which is weaker than secret. In the
@@ -32,8 +31,9 @@ a GitHub id node is effectively public.
 CI enforces `nargo fmt --check` on every package.
 
 `lib/identity` is the library the identity circuits share: commitment
-openings, the tagged node hash, the handle and id rules, and `identity_link`,
-the relation both bearer-link circuits run with their platform's constants. Its constants,
+openings, the tagged node hash, the token checks and the fold, and
+`identity_link`, the relation bearer-link runs. A circuit checks that a value
+is exactly the token the platform sent; its format is the platform's. Its constants,
 `src/table.nr`, and the vector tests beside them, `src/table_tests.nr`, are
 generated from libID-contracts' `solidity/contracts/handles/handles.json`, the
 table Solidity, Rust and TypeScript run too:
@@ -78,9 +78,9 @@ git -C ../libid-contracts rev-parse HEAD > contracts.ref
   --compare-noir-tests "$OLDPWD/lib/identity/src/table_tests.nr")
 ```
 
-`scripts/identity-link-witness.py` writes a `bearer-link-x` or
-`bearer-link-github` `Prover.toml` from a synthetic identity-link witness.
-The committed ones are written from
+`scripts/identity-link-witness.py` writes a `bearer-link` prover file from a
+synthetic X or GitHub identity-link witness. The committed
+`circuits/bearer-link/Prover.toml` (X) and `Prover-github.toml` are written from
 `fixtures/x-identity-link-witness.json` and
 `fixtures/github-identity-link-witness.json`: the `identity_link_witness`
 members of libID-contracts' synthetic
@@ -147,11 +147,10 @@ refuse to run under any other version.
 - `<Contract>.sol` — the EVM Solidity verifier
   (`bb write_solidity_verifier -t evm --optimized` on the vk, see
   "Regenerating a Solidity verifier"), the contract named after the circuit
-  directory: `bearer-link-x/BearerLinkXHonkVerifier.sol`,
-  `bearer-link-github/BearerLinkGithubHonkVerifier.sol`,
+  directory: `bearer-link/BearerLinkHonkVerifier.sol`,
   `oidc-google/OidcGoogleHonkVerifier.sol`;
-- `handles-table.nr` — lib/identity's generated table, the circuit's rules
-  and tags.
+- `handles-table.nr` — lib/identity's generated table, the circuit's tags
+  and buffers.
 
 ```sh
 scripts/build.sh              # build into ./artifacts/ (requires the pinned toolchain)
@@ -170,7 +169,7 @@ step it runs per circuit, and regenerates one from a vk alone — no nargo —
 for example to byte-compare an unpacked release against a local `bb`:
 
 ```sh
-scripts/gen-verifier.sh bearer-link-x                        # artifacts/bearer-link-x/BearerLinkXHonkVerifier.sol
+scripts/gen-verifier.sh bearer-link                          # artifacts/bearer-link/BearerLinkHonkVerifier.sol
 scripts/gen-verifier.sh oidc-google --artifacts ~/unpacked   # from a downloaded release's vk
 scripts/gen-verifier.sh oidc-google Verifier.sol --contract-name HonkVerifier
 ```
@@ -209,11 +208,11 @@ additional_compiler_profiles = [{ name = "verifiers", via_ir = false }]
 compilation_restrictions = [{ paths = "contracts/circuits/*HonkVerifier.sol", via_ir = false }]
 ```
 
-All three fit EIP-170's runtime size limit on the legacy pipeline with the
+Both fit EIP-170's runtime size limit on the legacy pipeline with the
 optimizer on.
 
 `scripts/check-verifiers.sh` compiles every verifier that way, then proves
-each circuit's committed witness, `circuits/<circuit>/Prover.toml`: the
+each circuit's committed witnesses, `circuits/<circuit>/Prover*.toml`: each
 proof must verify with `bb verify` and with the verifier deployed to anvil,
 and fail with one bit flipped. CI runs it after every build. It needs
 Foundry (`forge`, `anvil`, `cast`) besides the pinned nargo and bb:
@@ -255,6 +254,5 @@ Verification keys under the pinned toolchain (nargo 1.0.0-rc.3, bb 6.0.0-rc.2):
 
 | Circuit | vk_hash |
 |---|---|
-| `bearer-link-x` | `0x2d43f2ed1ef0e1955be8baa90d9f037c572308ca621eb89c6f497fbf36cc1daa` |
-| `bearer-link-github` | `0x30178fd1bcbd28d61c4603bf20d3c7a0a78c4474973e6c0900a4c473be82984b` |
-| `oidc-google` | `0x1b88ff47cad31a9d7993a69a2b518d915aa6a34e9e62fb508f7d58e4ad92a55e` |
+| `bearer-link` | `0x2cd0d21e96f8bbe6054e5cabd7c8c2911b2746cc17e8a8648edd77ad14857087` |
+| `oidc-google` | `0x24f940247d3108dacfc80e7e34b4a5efd0513a7c402a74565c20f099ec2aadba` |
