@@ -35,8 +35,9 @@ openings, the tagged node hash, the token checks and the fold, and
 `identity_link`, the relation bearer-link runs. A circuit checks that a value
 is exactly the token the platform sent; its format is the platform's. Its constants,
 `src/table.nr`, and the vector tests beside them, `src/table_tests.nr`, are
-generated from libID-contracts' `solidity/contracts/handles/handles.json`, the
-table Solidity, Rust and TypeScript run too:
+generated from libID-contracts' `solidity/contracts/handles/handles.json` (the
+vectors Solidity, Rust and TypeScript run too) and the platform `keys` in its
+`solidity/contracts/ceremony/profiles.json` (tags and buffers):
 
 ```sh
 # from a libID-contracts checkout, with nargo on PATH; writes both files
@@ -47,8 +48,8 @@ scripts/regen-identity-handles.py --noir-out ../libid-circuits/lib/identity/src/
 `handles-table.nr`, so a consumer can tell a verifier built from another
 table.
 
-`contracts.ref` pins the libID-contracts commit whose `handles.json` this
-table must match. CI fetches that commit and runs its
+`contracts.ref` pins the libID-contracts commit whose `handles.json` and
+`profiles.json` this table must match. CI fetches that commit and runs its
 `scripts/regen-identity-handles.py --compare-noir` against
 `lib/identity/src/table.nr`, and `--compare-noir-tests` against
 `lib/identity/src/table_tests.nr`. At the same commit it checks that
@@ -246,7 +247,7 @@ No `bb`, no nargo: the verifier is derived here, once, by the toolchain the
 manifest names.
 
 Also check `handles-table.nr` against your
-`handles.json` with libID-contracts'
+`handles.json` and `profiles.json` with libID-contracts'
 `scripts/regen-identity-handles.py --compare-noir handles-table.nr`. A
 mismatch means the verifier keys handles by another table.
 

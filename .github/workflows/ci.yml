@@ -8,7 +8,7 @@ name: CI
 # never committed and ship exclusively as release assets, rebuilt from
 # source by release.yml.
 # `handles-table` checks lib/identity's generated table against
-# libID-contracts' handles.json, and the vendored witness fixtures and the
+# libID-contracts' handles.json and profiles.json, and the vendored witness fixtures and the
 # Google fixture's digest against its ceremony session fixtures, at the
 # commit contracts.ref pins.
 # `dco` checks the Signed-off-by trailer CONTRIBUTING.md promises.
@@ -159,7 +159,7 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Handle table: lib/identity/src/table.nr and table_tests.nr are what libID-contracts'
-  # handles.json generates, at the commit contracts.ref pins. The comparison
+  # handles.json and profiles.json generate, at the commit contracts.ref pins. The comparison
   # is libID-contracts' own generator, so no rule is restated here. At the
   # same commit, the vendored fixtures are the ceremony session fixtures'
   # witnesses and oidc-google's digest is theirs. It needs git and Python
@@ -196,7 +196,7 @@ jobs:
           fi
           git -C libid-contracts checkout -q FETCH_HEAD
 
-      - name: table.nr and table_tests.nr match handles.json
+      - name: table.nr and table_tests.nr match handles.json and profiles.json
         run: |
           python3 libid-contracts/scripts/regen-identity-handles.py \
             --compare-noir "$GITHUB_WORKSPACE/lib/identity/src/table.nr" \
