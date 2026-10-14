@@ -1,8 +1,9 @@
 // Tests of lib.nr. Expected hashes are Python hashlib's, not this library's.
 
 use crate::{
-    BLINDER_LEN, check_id, constrain_bearer, fold_handle, hash_commit, MAX_BEARER_LEN,
-    MAX_HANDLE_BEARER_LINK, MAX_ID_BEARER_LINK, node_halves, table, tag_bytes, tag_of,
+    BLINDER_LEN, check_id, constrain_bearer, fixed_node_halves, fold_handle, hash_commit,
+    MAX_BEARER_LEN, MAX_HANDLE_BEARER_LINK, MAX_ID_BEARER_LINK, node_halves, table, tag_bytes,
+    tag_of,
 };
 use crate::testing::{blinder, padded};
 
@@ -44,10 +45,7 @@ fn the_bytes_past_the_bearer_change_nothing() {
         0xc4, 0x39, 0x22, 0x4e, 0x93, 0x7b, 0x37, 0xd3, 0x20, 0x08, 0xf5, 0x76, 0x9b, 0x4f, 0x1a,
         0xac, 0x66,
     ];
-    assert(
-        hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(bearer, 1, blinder(0))
-            == expected,
-    );
+    assert(hash_commit(bearer, 1, blinder(0)) == expected);
 }
 
 #[test(should_fail_with = "bearer too long")]
@@ -86,13 +84,13 @@ fn hash_commit_matches_an_independent_vector() {
         0x96, 0x6d, 0x79, 0x72, 0x44, 0x47, 0x6b, 0xb3, 0xb5, 0x4e, 0xba, 0xcd, 0xef, 0x26, 0x7e,
         0xc1, 0x3d,
     ];
-    assert(hash_commit::<4, 20>(plaintext, 4, blinder) == expected);
+    assert(hash_commit(plaintext, 4, blinder) == expected);
 }
 
 #[test(should_fail_with = "committed value is empty")]
 fn hash_commit_refuses_an_empty_value() {
     let plaintext: [u8; 4] = [0x61; 4];
-    let _ = hash_commit::<4, 20>(plaintext, 0, blinder(0));
+    let _ = hash_commit(plaintext, 0, blinder(0));
 }
 
 #[test]
@@ -105,10 +103,7 @@ fn hash_commit_covers_the_shortest_and_longest_bearer() {
         0xa3, 0x7d, 0x53, 0xdc, 0xc7, 0xd5, 0xd4, 0x3d, 0x5b, 0x5d, 0x28, 0xa1, 0x9e, 0x12, 0x73,
         0xf9, 0x48,
     ];
-    assert(
-        hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(shortest, 1, blinder(0))
-            == expected_shortest,
-    );
+    assert(hash_commit(shortest, 1, blinder(0)) == expected_shortest);
 
     // python3 -c "import hashlib; print(hashlib.sha256(b'~'*128 + bytes(range(16))).hexdigest())"
     let longest: [u8; MAX_BEARER_LEN] = [0x7e; MAX_BEARER_LEN];
@@ -117,14 +112,7 @@ fn hash_commit_covers_the_shortest_and_longest_bearer() {
         0xc1, 0xcb, 0x37, 0xce, 0xc7, 0x2d, 0xd6, 0xf7, 0xa6, 0xd2, 0x56, 0x65, 0xb9, 0xfb, 0xe2,
         0x81, 0x3f,
     ];
-    assert(
-        hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(
-            longest,
-            MAX_BEARER_LEN,
-            blinder(0),
-        )
-            == expected_longest,
-    );
+    assert(hash_commit(longest, MAX_BEARER_LEN, blinder(0)) == expected_longest);
 }
 
 #[test]
@@ -132,13 +120,8 @@ fn independent_blinders_give_different_commitments() {
     // REQ-COMMON-44: nothing outside a proof links the two sessions.
     let bearer: [u8; MAX_BEARER_LEN] = [0x7e; MAX_BEARER_LEN];
     let other: [u8; BLINDER_LEN] = [0x42; BLINDER_LEN];
-    let a = hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(
-        bearer,
-        MAX_BEARER_LEN,
-        blinder(0),
-    );
-    let b =
-        hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(bearer, MAX_BEARER_LEN, other);
+    let a = hash_commit(bearer, MAX_BEARER_LEN, blinder(0));
+    let b = hash_commit(bearer, MAX_BEARER_LEN, other);
     assert(a != b);
 }
 
@@ -175,6 +158,25 @@ fn the_bytes_past_the_handle_change_nothing() {
     assert(
         node_halves(tag, tag_len, out, 4)
             == [0x7fd25f75b7b97e348f2fadca95dde204, 0x897ae05f053c911eff907d6931108b90],
+    );
+}
+
+// --- Nodes ------------------------------------------------------------------
+
+#[test]
+fn fixed_node_halves_agrees_with_node_halves() {
+    // The table's vectors check node_halves; oidc-google proves with fixed_node_halves.
+    let sub: [u8; table::MAX_ID_GOOGLE] = padded("100000000000000000001".as_bytes());
+    let (id_tag, id_tag_len) = tag_of(table::USER_ID_TAG_GOOGLE);
+    assert(
+        fixed_node_halves(table::USER_ID_TAG_GOOGLE, sub, 21)
+            == node_halves(id_tag, id_tag_len, sub, 21),
+    );
+    let email: [u8; table::MAX_HANDLE_GOOGLE] = padded("fixture@example.com".as_bytes());
+    let (handle_tag, handle_tag_len) = tag_of(table::HANDLE_TAG_GOOGLE);
+    assert(
+        fixed_node_halves(table::HANDLE_TAG_GOOGLE, email, 19)
+            == node_halves(handle_tag, handle_tag_len, email, 19),
     );
 }
 

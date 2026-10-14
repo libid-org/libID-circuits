@@ -37,17 +37,15 @@ pub fn constrain_bearer<let MAX: u32>(bearer: [u8; MAX], bearer_len: u32) {
 }
 
 /// A tlsn hash commitment of a nonempty value, `SHA256(plaintext[0..plaintext_len] || blinder)`.
-/// `TOTAL` is `MAX_PLAIN + BLINDER_LEN`; Noir array types cannot express the sum.
-pub fn hash_commit<let MAX_PLAIN: u32, let TOTAL: u32>(
+pub fn hash_commit<let MAX_PLAIN: u32>(
     plaintext_padded: [u8; MAX_PLAIN],
     plaintext_len: u32,
     blinder: [u8; BLINDER_LEN],
 ) -> [u8; 32] {
-    assert(TOTAL == MAX_PLAIN + BLINDER_LEN, "TOTAL must equal MAX_PLAIN + BLINDER_LEN");
     assert(plaintext_len != 0, "committed value is empty");
     assert(plaintext_len <= MAX_PLAIN, "committed value longer than its buffer");
 
-    let mut input: [u8; TOTAL] = [0; TOTAL];
+    let mut input: [u8; MAX_PLAIN + BLINDER_LEN] = [0; MAX_PLAIN + BLINDER_LEN];
     for i in 0..MAX_PLAIN {
         input[i] = plaintext_padded[i];
     }
@@ -57,33 +55,13 @@ pub fn hash_commit<let MAX_PLAIN: u32, let TOTAL: u32>(
     sha256_var(input, plaintext_len + BLINDER_LEN)
 }
 
-/// `SHA256(tag[0..tag_len] || value[0..len])`, the node of a checked value.
-/// `TOTAL` is `MAX_TAG_LEN + MAX`.
-pub fn tagged_hash<let MAX: u32, let TOTAL: u32>(
-    tag: [u8; MAX_TAG_LEN],
-    tag_len: u32,
-    value: [u8; MAX],
-    len: u32,
-) -> [u8; 32] {
-    assert(TOTAL == MAX_TAG_LEN + MAX, "TOTAL must equal MAX_TAG_LEN + MAX");
-    assert(tag_len <= MAX_TAG_LEN, "tag longer than a Field");
-    let mut preimage: [u8; TOTAL] = [0; TOTAL];
-    for i in 0..MAX_TAG_LEN {
-        preimage[i] = tag[i];
-    }
-    for i in 0..MAX {
-        preimage[tag_len + i] = value[i];
-    }
-    sha256_var(preimage, tag_len + len)
-}
-
 /// A tag as a public input carries it: its bytes big-endian from the top of
 /// the Field, zero past its length.
 pub fn tag_bytes(packed: Field) -> [u8; MAX_TAG_LEN] {
     packed.to_be_bytes()
 }
 
-/// A compiled tag in the shape `tagged_hash` takes.
+/// A compiled tag in the shape `node_halves` takes.
 pub fn tag_of<let N: u32>(tag: [u8; N]) -> ([u8; MAX_TAG_LEN], u32) {
     let mut out: [u8; MAX_TAG_LEN] = [0; MAX_TAG_LEN];
     for i in 0..N {
@@ -120,16 +98,23 @@ pub fn fixed_node_halves<let TAG: u32, let MAX: u32>(
     halves(sha256_var(preimage, TAG + len))
 }
 
-/// A node as the public inputs carry it. The caller checks `value` first.
+/// `SHA256(tag[0..tag_len] || value[0..len])` as the public inputs carry it.
+/// The caller checks `value` first.
 pub fn node_halves<let MAX: u32>(
     tag: [u8; MAX_TAG_LEN],
     tag_len: u32,
     value: [u8; MAX],
     len: u32,
 ) -> [Field; 2] {
-    halves(
-        tagged_hash::<MAX, MAX_TAG_LEN + MAX>(tag, tag_len, value, len),
-    )
+    assert(tag_len <= MAX_TAG_LEN, "tag longer than a Field");
+    let mut preimage: [u8; MAX_TAG_LEN + MAX] = [0; MAX_TAG_LEN + MAX];
+    for i in 0..MAX_TAG_LEN {
+        preimage[i] = tag[i];
+    }
+    for i in 0..MAX {
+        preimage[tag_len + i] = value[i];
+    }
+    halves(sha256_var(preimage, tag_len + len))
 }
 
 /// A byte of a JSON string as sent: printable ASCII, not `"` or `\`. A value
@@ -202,43 +187,20 @@ pub fn identity_link(
     // 1. The bearer link.
     constrain_bearer(bearer, bearer_len);
     assert(
-        halves(hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(
-            bearer,
-            bearer_len,
-            blinder_token,
-        ))
-            == token_commitment,
+        halves(hash_commit(bearer, bearer_len, blinder_token)) == token_commitment,
         "token bearer commitment mismatch",
     );
     assert(
-        halves(hash_commit::<MAX_BEARER_LEN, MAX_BEARER_LEN + BLINDER_LEN>(
-            bearer,
-            bearer_len,
-            blinder_identity,
-        ))
-            == identity_commitment,
+        halves(hash_commit(bearer, bearer_len, blinder_identity)) == identity_commitment,
         "identity bearer commitment mismatch",
     );
 
     // 2. The values as sent: whole JSON tokens, so no commitment runs past one.
     check_id(id, id_len, true);
     let folded = fold_handle(handle, handle_len);
+    assert(halves(hash_commit(id, id_len, blinder_id)) == id_commitment, "id commitment mismatch");
     assert(
-        halves(hash_commit::<MAX_ID_BEARER_LINK, MAX_ID_BEARER_LINK + BLINDER_LEN>(
-            id,
-            id_len,
-            blinder_id,
-        ))
-            == id_commitment,
-        "id commitment mismatch",
-    );
-    assert(
-        halves(hash_commit::<MAX_HANDLE_BEARER_LINK, MAX_HANDLE_BEARER_LINK + BLINDER_LEN>(
-            handle,
-            handle_len,
-            blinder_handle,
-        ))
-            == handle_commitment,
+        halves(hash_commit(handle, handle_len, blinder_handle)) == handle_commitment,
         "handle commitment mismatch",
     );
 
