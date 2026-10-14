@@ -5,9 +5,9 @@
 // Platform tags and buffers, for the identity circuits. The transform is
 // lib.nr's; table_tests.nr runs it against the shared vector table.
 
-/// SHA-256 of the handles.json and profiles.json this file was generated from.
+/// SHA-256 of the handles.json this file was generated from.
 pub global TABLE_SHA256: str<64> =
-    "b980714401228c1f23afca34ee8d942931a15e7f3bbf53960d3b409172e669cd";
+    "410f1b511ea1d8194cd648d0e5e8d4c20c4ed1717e7e35b95ddc52d9eb515f06";
 
 /// `libid.google.user-id`
 pub global USER_ID_TAG_GOOGLE: [u8; 20] = [
