@@ -18,7 +18,7 @@ pub global MAX_TAG_LEN: u32 = 31;
 pub global MAX_HANDLE_BEARER_LINK: u32 = 39;
 pub global MAX_ID_BEARER_LINK: u32 = 20;
 
-/// The bearer cap, the opening's main cost (REQ-PLAT-30/36 allow 4096).
+/// The bearer cap (REQ-PLAT-30, REQ-PLAT-36), the opening's main cost.
 /// A live X bearer measured 91 bytes, a GitHub `gho_` token is 40.
 pub global MAX_BEARER_LEN: u32 = 128;
 
