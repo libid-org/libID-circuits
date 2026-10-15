@@ -56,7 +56,7 @@ pub fn hash_commit<let MAX_PLAIN: u32>(
 }
 
 /// A tag as a public input carries it: its bytes big-endian from the top of
-/// the Field, zero past its length.
+/// the Field. `node_halves` requires zeros past its length.
 pub fn tag_bytes(packed: Field) -> [u8; MAX_TAG_LEN] {
     packed.to_be_bytes()
 }
@@ -100,6 +100,7 @@ pub fn fixed_node_halves<let TAG: u32, let MAX: u32>(
 }
 
 /// `SHA256(tag[0..tag_len] || value[0..len])` as the public inputs carry it.
+/// The tag is nonempty and zero past `tag_len`, so one Field encodes it.
 /// The caller checks `value` first.
 pub fn node_halves<let MAX: u32>(
     tag: [u8; MAX_TAG_LEN],
@@ -107,10 +108,14 @@ pub fn node_halves<let MAX: u32>(
     value: [u8; MAX],
     len: u32,
 ) -> [Field; 2] {
+    assert(tag_len != 0, "tag is empty");
     assert(tag_len <= MAX_TAG_LEN, "tag longer than a Field");
     assert(len <= MAX, "value longer than its buffer");
     let mut preimage: [u8; MAX_TAG_LEN + MAX] = [0; MAX_TAG_LEN + MAX];
     for i in 0..MAX_TAG_LEN {
+        if i >= tag_len {
+            assert(tag[i] == 0, "tag byte past its length");
+        }
         preimage[i] = tag[i];
     }
     for i in 0..MAX {

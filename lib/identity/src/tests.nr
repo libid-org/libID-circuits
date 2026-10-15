@@ -2,8 +2,8 @@
 
 use crate::{
     BLINDER_LEN, check_id, constrain_bearer, fixed_node_halves, fold_handle, hash_commit,
-    MAX_BEARER_LEN, MAX_HANDLE_BEARER_LINK, MAX_ID_BEARER_LINK, node_halves, table, tag_bytes,
-    tag_of,
+    MAX_BEARER_LEN, MAX_HANDLE_BEARER_LINK, MAX_ID_BEARER_LINK, MAX_TAG_LEN, node_halves, table,
+    tag_bytes, tag_of,
 };
 use crate::testing::{blinder, padded};
 
@@ -188,6 +188,21 @@ fn a_packed_tag_is_its_bytes_from_the_top() {
     let packed = 191546819536254810227069963542963682822352149726751247095476095263271026688;
     let (tag, _) = tag_of(table::HANDLE_TAG_X);
     assert(tag_bytes(packed) == tag);
+}
+
+#[test(should_fail_with = "tag is empty")]
+fn an_empty_tag_is_refused() {
+    // An untagged node, SHA256(value), would be any platform's.
+    let id: [u8; table::MAX_ID_X] = padded("2244994945".as_bytes());
+    let _ = node_halves([0; MAX_TAG_LEN], 0, id, 10);
+}
+
+#[test(should_fail_with = "tag byte past its length")]
+fn a_tag_with_bytes_past_its_length_is_refused() {
+    // "libid.x.handle" with a 13-byte length: the Field and length disagree.
+    let (tag, tag_len) = tag_of(table::HANDLE_TAG_X);
+    let handle: [u8; table::MAX_HANDLE_X] = padded("al_1".as_bytes());
+    let _ = node_halves(tag, tag_len - 1, handle, 4);
 }
 
 // --- The table's buffers ----------------------------------------------------

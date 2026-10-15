@@ -240,10 +240,18 @@ fn the_handle_tag_in_the_id_position_is_refused() {
     run(c);
 }
 
-#[test(should_fail_with = "handle node mismatch")]
+#[test(should_fail_with = "tag byte past its length")]
 fn a_tag_one_byte_short_is_refused() {
     let mut c = x();
     c.handle_tag_len = table::HANDLE_TAG_X.len() - 1;
+    run(c);
+}
+
+#[test(should_fail_with = "tag is empty")]
+fn an_empty_tag_is_refused() {
+    let mut c = x();
+    c.id_tag = 0;
+    c.id_tag_len = 0;
     run(c);
 }
 
