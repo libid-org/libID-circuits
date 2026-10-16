@@ -109,6 +109,13 @@ jobs:
       - name: shellcheck
         run: shellcheck scripts/*.sh
 
+      # lib/identity/src/table.nr and table_tests.nr are what platforms.json
+      # and handles.json generate; a hand edit or a stale regeneration fails
+      # here. nargo formats the generated Noir, so this runs after the
+      # toolchain is on PATH.
+      - name: The identity table is generated
+        run: python3 scripts/identity_table.py --check
+
       # Every circuit carries its own #[test] fns in src/main.nr, and
       # lib/identity runs the handles.json vector table (src/table_tests.nr) and
       # its own tests (src/tests.nr).
