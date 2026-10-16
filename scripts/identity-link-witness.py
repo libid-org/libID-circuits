@@ -18,7 +18,6 @@ import hashlib
 import json
 import pathlib
 import sys
-import typing
 
 sys.dont_write_bytecode = True
 import identity_table  # noqa: E402  (beside this script)
@@ -29,31 +28,6 @@ PROVER_FILES = {"x": "Prover.toml", "github": "Prover-github.toml"}
 BEARER_LINK = identity_table.ROOT / "circuits" / "bearer-link"
 
 toml_array = functools.partial(identity_table.toml_array, quoted=True)
-
-T = typing.TypeVar("T")
-
-
-def of_json(cls: type[T], doc: object, where: str) -> T:
-    """`doc` as the dataclass `cls`: one member per field, nested dataclasses
-    recursively, members the class does not declare ignored. `where` names
-    the document in a refusal."""
-    fields = dataclasses.fields(cls)
-    if not isinstance(doc, dict):
-        raise SystemExit(f"{where}: expected an object with {', '.join(f.name for f in fields)}")
-    hints = typing.get_type_hints(cls)
-    members = {}
-    for field in fields:
-        if field.name not in doc:
-            raise SystemExit(f"{where}: no `{field.name}`")
-        kind = hints[field.name]
-        value = doc[field.name]
-        if dataclasses.is_dataclass(kind):
-            value = of_json(kind, value, f"{where}.{field.name}")
-        elif not isinstance(value, kind):
-            raise SystemExit(f"{where}.{field.name}: expected {kind.__name__}")
-        members[field.name] = value
-    return cls(**members)
-
 
 @dataclasses.dataclass(frozen=True)
 class Opening:
@@ -178,7 +152,7 @@ class Fixture:
     @classmethod
     def load(cls, path: pathlib.Path) -> Fixture:
         """The fixture in `path`, synthetic and with a witness that checks."""
-        fixture = of_json(cls, json.loads(path.read_text()), str(path))
+        fixture = identity_table.of_json(cls, json.loads(path.read_text()), str(path))
         if not fixture.provenance.synthetic:
             raise SystemExit(f"{path}: `provenance.synthetic` is not true; only synthetic fixtures are witnessed here")
         fixture.identity_link_witness.check()
