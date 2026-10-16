@@ -98,8 +98,8 @@ def main() -> int:
             f"{args.witness}: the bearer is {len(bearer)} bytes; the bearer-link circuit "
             f"caps it at {max_bearer} (MAX_BEARER_LEN in lib/identity/src/lib.nr)"
         )
-    max_id = identity_table.integer("MAX_ID_BEARER_LINK", identity_table.LIB)
-    max_handle = identity_table.integer("MAX_HANDLE_BEARER_LINK", identity_table.LIB)
+    max_id = identity_table.integer(f"MAX_ID_{suffix}")
+    max_handle = identity_table.integer(f"MAX_HANDLE_{suffix}")
     id_tag = identity_table.byte_array(f"USER_ID_TAG_{suffix}")
     handle_tag = identity_table.byte_array(f"HANDLE_TAG_{suffix}")
     folded = identity_table.fold(handle)

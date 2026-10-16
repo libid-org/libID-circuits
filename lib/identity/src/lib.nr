@@ -14,9 +14,9 @@ pub global BLINDER_LEN: u32 = 16;
 /// The widest tag a public input carries: one Field holds 31 bytes.
 pub global MAX_TAG_LEN: u32 = 31;
 
-/// bearer-link's buffers: GitHub's 39-byte login, and 20 id digits.
-pub global MAX_HANDLE_BEARER_LINK: u32 = 39;
-pub global MAX_ID_BEARER_LINK: u32 = 20;
+/// bearer-link's buffers are the table's; tests.nr holds GitHub's to X's.
+pub global MAX_HANDLE_BEARER_LINK: u32 = table::MAX_HANDLE_X;
+pub global MAX_ID_BEARER_LINK: u32 = table::MAX_ID_X;
 
 /// The bearer cap (REQ-PLAT-30, REQ-PLAT-36), the opening's main cost.
 /// A live X bearer measured 91 bytes, a GitHub `gho_` token is 40.
