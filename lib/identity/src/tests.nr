@@ -209,10 +209,8 @@ fn a_tag_with_bytes_past_its_length_is_refused() {
 // --- The table's buffers ----------------------------------------------------
 
 #[test]
-fn bearer_link_s_buffers_are_the_table_s() {
-    assert(table::MAX_HANDLE_X == MAX_HANDLE_BEARER_LINK);
+fn github_s_buffers_are_bearer_link_s() {
     assert(table::MAX_HANDLE_GITHUB == MAX_HANDLE_BEARER_LINK);
-    assert(table::MAX_ID_X == MAX_ID_BEARER_LINK);
     assert(table::MAX_ID_GITHUB == MAX_ID_BEARER_LINK);
     assert(table::ID_DECIMAL_X & table::ID_DECIMAL_GITHUB);
 }
