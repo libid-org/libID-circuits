@@ -19,8 +19,9 @@
 #                   contract named after the circuit (bearer-link ->
 #                   BearerLinkHonkVerifier); see scripts/gen-verifier.sh.
 #                   Ships so that consumers compile it and never run bb.
-#   handles-table.nr  lib/identity's generated table.nr, the circuit's tags
-#                     and buffers
+#   platforms.json  each platform's node tags, buffers and id shape, the
+#                   source of lib/identity's table.nr
+#   handles.json    the shared vector table, the source of its table_tests.nr
 #
 # and <out>/commit: the circuits commit built, with `-dirty` when the tree has
 # modified or untracked files, or `unknown` outside a readable git work tree.
@@ -78,7 +79,8 @@ if [[ "$have_bb" != "$BB_VERSION" ]]; then
   exit 1
 fi
 
-TABLE="$ROOT/lib/identity/src/table.nr"
+PLATFORMS="$ROOT/lib/identity/platforms.json"
+HANDLES="$ROOT/lib/identity/handles.json"
 
 # Read before building, so build output cannot mark the tree dirty. Unless
 # git reads $ROOT as its own work tree (not a parent's), the commit is `unknown`.
@@ -125,9 +127,9 @@ for dir in "$ROOT"/circuits/*/; do
   # names, so a renamed directory fails here instead of at a consumer.
   "$ROOT/scripts/gen-verifier.sh" "$circuit" --artifacts "$OUT"
 
-  # Ship the table the circuit's tags and buffers come from, for consumers to
-  # compare with their handles.json.
-  cp "$TABLE" "$OUT/$circuit/handles-table.nr"
+  # The platform table and the vectors the circuit was built from, for
+  # consumers to generate their own tables from.
+  cp "$PLATFORMS" "$HANDLES" "$OUT/$circuit/"
 done
 
 echo "$commit" > "$OUT/commit"
