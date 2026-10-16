@@ -33,51 +33,23 @@ CI enforces `nargo fmt --check` on every package.
 `lib/identity` is the library the identity circuits share: commitment
 openings, the tagged node hash, the token checks and the fold, and
 `identity_link`, the relation bearer-link runs. A circuit checks that a value
-is exactly the token the platform sent; its format is the platform's. Its constants,
-`src/table.nr`, and the vector tests beside them, `src/table_tests.nr`, are
-generated from libID-contracts' `solidity/contracts/handles/handles.json` (the
-vectors Solidity, Rust and TypeScript run too) and the platform `keys` in its
-`solidity/contracts/ceremony/profiles.json` (tags and buffers):
+is exactly the token the platform sent; its format is the platform's.
+
+The platform table is this repository's. `lib/identity/platforms.json` holds
+each platform's node tags, the circuits' buffers and whether its id is
+decimal; `lib/identity/handles.json` holds the shared vector table every
+language runs. `scripts/identity_table.py` generates the constants,
+`src/table.nr`, and one test per vector, `src/table_tests.nr`, from them:
 
 ```sh
-# from a libID-contracts checkout, with nargo on PATH; writes both files
-scripts/regen-identity-handles.py --noir-out ../libid-circuits/lib/identity/src/table.nr
+scripts/identity_table.py          # with nargo on PATH; writes both files
+scripts/identity_table.py --check  # what CI runs
 ```
 
-`scripts/build.sh` copies the table into each circuit's artifacts as
-`handles-table.nr`, so a consumer can tell a verifier built from another
-table.
-
-`contracts.ref` pins the libID-contracts commit whose `handles.json` and
-`profiles.json` this table must match. CI fetches that commit and runs its
-`scripts/regen-identity-handles.py --compare-noir` against
-`lib/identity/src/table.nr`, and `--compare-noir-tests` against
-`lib/identity/src/table_tests.nr`. At the same commit `scripts/check-fixtures.py` checks that
-`fixtures/{x,github}-identity-link-witness.json` hold the
-`identity_link_witness` members of
-`solidity/contracts/ceremony/test/fixtures/{x,github}-ceremony-session.json`,
-and that `scripts/google-fixture-witness.py`'s `DIGEST` is those sessions'
-`authorization_digest`. It needs git and Python.
-
-The pin must end on a commit on libID-contracts' main; a feature-branch pin
-fails once that branch is deleted. A change spanning both repositories lands
-in this order:
-
-1. Cut a pre-release tag here from the PR branch.
-2. libID-contracts pins it in `circuits.json` (version and sha256s).
-3. libID-contracts' CI goes green and its PR merges.
-4. `contracts.ref` moves to that merged commit on main, and this PR merges.
-
-A squash merge must keep the tagged tree identical apart from
-`contracts.ref`, so the release libID-contracts pins still matches main. To
-move the pin after regenerating the table:
-
-```sh
-git -C ../libid-contracts rev-parse HEAD > contracts.ref
-(cd ../libid-contracts && scripts/regen-identity-handles.py \
-  --compare-noir "$OLDPWD/lib/identity/src/table.nr" \
-  --compare-noir-tests "$OLDPWD/lib/identity/src/table_tests.nr")
-```
+Every release ships both JSON files beside each circuit's verifier, and
+[libID-contracts] generates its Solidity, Rust and TypeScript tables from the
+shipped copies, so an edit here reaches every language through the release
+it pins.
 
 `scripts/identity-link-witness.py` writes a `bearer-link` prover file from a
 synthetic X or GitHub identity-link witness. The committed
@@ -89,7 +61,9 @@ members of libID-contracts' synthetic
 (libid-rs' `cargo run -p libid-tlsn --example ceremony_fixtures`), whose
 handles (`Alice_1`, `OctoCat`) exercise the fold, each beside a `provenance`
 object with `"synthetic": true`. CI regenerates both and fails on a
-difference.
+difference. After copying a fixture, `scripts/check-fixtures.py
+<libID-contracts checkout>` checks both files and
+`scripts/google-fixture-witness.py`'s `DIGEST` against those sessions.
 
 The script refuses a fixture without that marker.
 
@@ -149,8 +123,8 @@ refuse to run under any other version.
   "Regenerating a Solidity verifier"), the contract named after the circuit
   directory: `bearer-link/BearerLinkHonkVerifier.sol`,
   `oidc-google/OidcGoogleHonkVerifier.sol`;
-- `handles-table.nr` — lib/identity's generated table, the circuit's tags
-  and buffers.
+- `platforms.json` and `handles.json` — the platform table and the vectors
+  the circuit was built from, copied from `lib/identity/`.
 
 ```sh
 scripts/build.sh              # build into ./artifacts/ (requires the pinned toolchain)
@@ -231,7 +205,8 @@ Publishing a GitHub Release tagged `v<version>` builds the artifacts from
 source with the pinned toolchain (`scripts/build.sh`) and attaches:
 
 - `libid-circuits-<version>-<circuit>.tar.gz` — one per circuit, containing
-  `<package>.json`, `vk`, `vk_hash`, `<Contract>.sol` and `handles-table.nr`;
+  `<package>.json`, `vk`, `vk_hash`, `<Contract>.sol`, `platforms.json` and
+  `handles.json`;
 - `manifest.json` — `{version, tag, commit, toolchain: {nargo, bb}, tarballs:
   {<tarball>: {sha256, files: {<name>: sha256}}}}`.
 
@@ -244,12 +219,11 @@ against its entry in `files`, run `forge fmt` over it under your own
 No `bb`, no nargo: the verifier is derived here, once, by the toolchain the
 manifest names.
 
-Also check `handles-table.nr` against your
-`handles.json` and `profiles.json` with libID-contracts'
-`scripts/regen-identity-handles.py --compare-noir handles-table.nr`. A
-mismatch means the circuit's buffers, or oidc-google's compiled tags, are not
-your table's. bearer-link takes its tags as public inputs, so the verifying
-contract must pass the tags profiles.json names.
+`platforms.json` and `handles.json` in the same tarball, checked against
+`files` the same way, are the table the circuit was built from: generate your
+tags, buffers and vectors from them instead of keeping a copy. oidc-google's
+tags are compiled in; bearer-link takes its tags as public inputs, so the
+verifying contract must pass the tags `platforms.json` names.
 
 Verification keys under the pinned toolchain (nargo 1.0.0-rc.3, bb 6.0.0-rc.2):
 

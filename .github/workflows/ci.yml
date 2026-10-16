@@ -1,16 +1,13 @@
 name: CI
 
-# Three jobs. `circuits` proves that the committed sources build under the
-# pinned toolchain: tests pass, every circuit compiles, every vk generates,
-# and every Solidity verifier generates under its pinned contract name,
-# compiles the way consumers compile it, and verifies a proof of each
+# Two jobs. `circuits` proves that the committed sources build under the
+# pinned toolchain: the generated identity table and the witnesses are what
+# their sources generate, tests pass, every circuit compiles, every vk
+# generates, and every Solidity verifier generates under its pinned contract
+# name, compiles the way consumers compile it, and verifies a proof of each
 # committed witness on chain. Nothing built here is kept — artifacts are
 # never committed and ship exclusively as release assets, rebuilt from
 # source by release.yml.
-# `handles-table` checks lib/identity's generated table against
-# libID-contracts' handles.json and profiles.json, and the vendored witness fixtures and the
-# Google fixture's digest against its ceremony session fixtures, at the
-# commit contracts.ref pins.
 # `dco` checks the Signed-off-by trailer CONTRIBUTING.md promises.
 #
 # Every third-party action is pinned by commit SHA, with the tag in a
@@ -163,55 +160,6 @@ jobs:
 
       - name: Check the verifiers
         run: ./scripts/check-verifiers.sh --artifacts "$RUNNER_TEMP/artifacts"
-
-  # ---------------------------------------------------------------------------
-  # Handle table: lib/identity/src/table.nr and table_tests.nr are what
-  # libID-contracts' handles.json and profiles.json generate, compared by its
-  # own generator at the commit contracts.ref pins. At the same commit, the
-  # vendored fixtures are the ceremony session fixtures' witnesses and
-  # oidc-google's digest is theirs. It needs git and Python.
-  # ---------------------------------------------------------------------------
-  handles-table:
-    name: Handle table
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Read the pinned libID-contracts commit
-        id: pin
-        run: |
-          set -euo pipefail
-          ref="$(tr -d '[:space:]' < contracts.ref)"
-          [[ "$ref" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::contracts.ref must hold one full commit SHA"; exit 1; }
-          echo "ref=$ref" >> "$GITHUB_OUTPUT"
-
-      # Plain git rather than actions/checkout, so a missing commit fails with
-      # the fix named: contracts.ref must be reachable from a branch
-      # libID-contracts serves, which after a merge is its main.
-      - name: Check out libID-contracts at the pin
-        env:
-          REF: ${{ steps.pin.outputs.ref }}
-        run: |
-          set -euo pipefail
-          git init -q libid-contracts
-          git -C libid-contracts remote add origin https://github.com/libid-org/libID-contracts.git
-          if ! git -C libid-contracts fetch -q --depth 1 origin "$REF"; then
-            echo "::error::libID-contracts serves no commit $REF (contracts.ref); a commit only on an unpushed or deleted branch cannot be fetched. Merge the libID-contracts change first, then point contracts.ref at its commit on libID-contracts' main (README, contracts.ref)."
-            exit 1
-          fi
-          git -C libid-contracts checkout -q FETCH_HEAD
-
-      - name: table.nr and table_tests.nr match handles.json and profiles.json
-        run: |
-          python3 libid-contracts/scripts/regen-identity-handles.py \
-            --compare-noir "$GITHUB_WORKSPACE/lib/identity/src/table.nr" \
-            --compare-noir-tests "$GITHUB_WORKSPACE/lib/identity/src/table_tests.nr"
-
-      # The vendored witnesses are the session fixtures' `identity_link_witness`
-      # members, and oidc-google's nonce is their Authorization Digest.
-      - name: Fixtures match libID-contracts' session fixtures
-        run: python3 scripts/check-fixtures.py libid-contracts
 
   # ---------------------------------------------------------------------------
   # DCO: every commit carries a Signed-off-by trailer, as CONTRIBUTING.md
