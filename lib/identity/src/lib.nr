@@ -55,12 +55,6 @@ pub fn hash_commit<let MAX_PLAIN: u32>(
     sha256_var(input, plaintext_len + BLINDER_LEN)
 }
 
-/// A tag as a public input carries it: its bytes big-endian from the top of
-/// the Field. `node_halves` requires zeros past its length.
-pub fn tag_bytes(packed: Field) -> [u8; MAX_TAG_LEN] {
-    packed.to_be_bytes()
-}
-
 /// A compiled tag in the shape `node_halves` takes.
 pub fn tag_of<let N: u32>(tag: [u8; N]) -> ([u8; MAX_TAG_LEN], u32) {
     let mut out: [u8; MAX_TAG_LEN] = [0; MAX_TAG_LEN];
@@ -100,8 +94,8 @@ pub fn fixed_node_halves<let TAG: u32, let MAX: u32>(
 }
 
 /// `SHA256(tag[0..tag_len] || value[0..len])` as the public inputs carry it.
-/// The tag is nonempty and zero past `tag_len`, so one Field encodes it.
-/// The caller checks `value` first.
+/// The tag is nonempty and zero past `tag_len`, so one Field encodes it: a
+/// public input's tag is `packed.to_be_bytes()`. The caller checks `value` first.
 pub fn node_halves<let MAX: u32>(
     tag: [u8; MAX_TAG_LEN],
     tag_len: u32,
@@ -212,9 +206,12 @@ pub fn identity_link(
     );
 
     // 3. The keys.
-    assert(node_halves(tag_bytes(id_tag), id_tag_len, id, id_len) == id_node, "id node mismatch");
     assert(
-        node_halves(tag_bytes(handle_tag), handle_tag_len, folded, handle_len) == handle_node,
+        node_halves(id_tag.to_be_bytes(), id_tag_len, id, id_len) == id_node,
+        "id node mismatch",
+    );
+    assert(
+        node_halves(handle_tag.to_be_bytes(), handle_tag_len, folded, handle_len) == handle_node,
         "handle node mismatch",
     );
 }
