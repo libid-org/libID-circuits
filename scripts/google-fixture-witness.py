@@ -38,11 +38,11 @@ EMAIL_MAX = identity_table.integer("MAX_HANDLE_GOOGLE")
 SUB_MAX = identity_table.integer("MAX_ID_GOOGLE")
 USER_ID_TAG = identity_table.byte_array("USER_ID_TAG_GOOGLE")
 HANDLE_TAG = identity_table.byte_array("HANDLE_TAG_GOOGLE")
-# noir-bignum's limb width; main.nr takes it from the library, not as a global.
+# noir-bignum's limb width, which main.nr takes from the library.
 LIMB_BITS = 120
 
 
-# The synthetic key. Nothing outside this file signs with it.
+# The synthetic signing key.
 N = int(
     "ac6e236e39697f5ac592e78ea304a62e443e806438f69af826cfd2c1b8beaadf"
     "af1fe49884224453fbbbe3af9cd90b80663c63ee708512212dceb1a0045debc0"

@@ -57,7 +57,7 @@ table.
 `identity_link_witness` members of
 `solidity/contracts/ceremony/test/fixtures/{x,github}-ceremony-session.json`,
 and that `scripts/google-fixture-witness.py`'s `DIGEST` is those sessions'
-`authorization_digest`. It needs git and Python only.
+`authorization_digest`. It needs git and Python.
 
 The pin must end on a commit on libID-contracts' main; a feature-branch pin
 fails once that branch is deleted. A change spanning both repositories lands
@@ -91,8 +91,7 @@ handles (`Alice_1`, `OctoCat`) exercise the fold, each beside a `provenance`
 object with `"synthetic": true`. CI regenerates both and fails on a
 difference.
 
-Only synthetic fixtures are witnessed here; the script refuses a file
-without that marker.
+The script refuses a fixture without that marker.
 
 ## Toolchain
 

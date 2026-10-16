@@ -50,7 +50,7 @@ source "$ROOT/toolchain.env"
 # The contract names consumers compile by. Derived by verifier_name, pinned
 # here so a renamed directory fails loudly instead of silently shipping a
 # differently-named contract. A new circuit needs no entry; a rename of one
-# listed here is a breaking change for every consumer and must be deliberate.
+# listed here is a breaking change for every consumer.
 KNOWN_VERIFIERS=(
   bearer-link=BearerLinkHonkVerifier
   oidc-google=OidcGoogleHonkVerifier
@@ -95,7 +95,7 @@ for entry in "${KNOWN_VERIFIERS[@]}"; do
   want="${entry##*=}"
   if [[ ! -d "$ROOT/circuits/$known" ]]; then
     echo "error: circuits/$known is gone, but consumers compile it as $want." >&2
-    echo "  A renamed circuit directory renames the shipped contract; change KNOWN_VERIFIERS in $0 deliberately." >&2
+    echo "  A renamed circuit directory renames the shipped contract; update KNOWN_VERIFIERS in $0." >&2
     exit 1
   fi
   got="$(verifier_name "$known")"

@@ -158,12 +158,11 @@ jobs:
         run: ./scripts/check-verifiers.sh --artifacts "$RUNNER_TEMP/artifacts"
 
   # ---------------------------------------------------------------------------
-  # Handle table: lib/identity/src/table.nr and table_tests.nr are what libID-contracts'
-  # handles.json and profiles.json generate, at the commit contracts.ref pins. The comparison
-  # is libID-contracts' own generator, so no rule is restated here. At the
-  # same commit, the vendored fixtures are the ceremony session fixtures'
-  # witnesses and oidc-google's digest is theirs. It needs git and Python
-  # alone.
+  # Handle table: lib/identity/src/table.nr and table_tests.nr are what
+  # libID-contracts' handles.json and profiles.json generate, compared by its
+  # own generator at the commit contracts.ref pins. At the same commit, the
+  # vendored fixtures are the ceremony session fixtures' witnesses and
+  # oidc-google's digest is theirs. It needs git and Python.
   # ---------------------------------------------------------------------------
   handles-table:
     name: Handle table
