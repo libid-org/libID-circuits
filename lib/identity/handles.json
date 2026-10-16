@@ -12,12 +12,12 @@
     "runs the accepted ones.",
     "",
     "The circuit checks that a value is exactly the JSON token the platform",
-    "sent, nothing about its format: that is the platform's to keep. A handle,",
-    "or an id that is a JSON string, is printable ASCII 0x20-0x7e without '\"'",
-    "or '\\\\', so a commitment between revealed quotes holds one string. An id",
-    "that is a number is decimal digits. A-Z in a handle fold to a-z; nothing",
-    "else changes, nothing is trimmed, and an id is never folded. Each length",
-    "is the circuit's buffer.",
+    "sent; a handle's format is the platform's to keep. A handle, or an id",
+    "that is a JSON string, is printable ASCII 0x20-0x7e without '\"' or",
+    "'\\\\', so a commitment between revealed quotes holds one string. An id",
+    "that is a number is REQ-PLAT-06's ^[1-9][0-9]{0,19}$ with a value at most",
+    "2^64-1. A-Z in a handle fold to a-z; nothing else changes, nothing is",
+    "trimmed, and an id is never folded. Each length is the circuit's buffer.",
     "",
     "A node is SHA256(tag || value): the handle node over the folded handle,",
     "the id node over the id exactly as the platform sent it. The tags are raw",
@@ -39,6 +39,10 @@
     {
       "key": "BadCharacter",
       "note": "A byte that is not part of the token as sent."
+    },
+    {
+      "key": "BadShape",
+      "note": "A number no X or GitHub id spells: a leading zero, or a value past 2^64-1."
     }
   ],
   "vectors": [
@@ -232,15 +236,44 @@
     },
     {
       "platform": "x",
+      "input": "1",
+      "idNode": "0x7ae74974aded3c7dc81c333042ab69c89a3c2da2fca55df6b3679d46f383c0e5",
+      "note": "The smallest id."
+    },
+    {
+      "platform": "x",
+      "input": "18446744073709551615",
+      "idNode": "0xf5341a892456cd845598d346a1102f6154b9c6a00b434a22cb305965a1efd045",
+      "note": "2^64-1, the largest id, fills the 20-digit buffer."
+    },
+    {
+      "platform": "x",
+      "input": "0",
+      "error": "BadShape",
+      "note": "No id is 0: a single 0 is a leading zero of nothing."
+    },
+    {
+      "platform": "x",
+      "input": "007",
+      "error": "BadShape"
+    },
+    {
+      "platform": "x",
       "input": "0123",
-      "idNode": "0x68ceaf8a314f0264ed9fb64143960fdedd2a5223c2c87fe65de6232f1cfc9ebf",
-      "note": "Digits as sent: the platform writes its ids."
+      "error": "BadShape",
+      "note": "A leading zero is a second spelling of 123."
     },
     {
       "platform": "x",
       "input": "18446744073709551616",
-      "idNode": "0xe065622d687c739269f8ff862dac12c5acc087e87d676041148e2c1df17b429f",
-      "note": "20 digits is the buffer, whatever the value."
+      "error": "BadShape",
+      "note": "2^64 has 20 digits but is past the largest id."
+    },
+    {
+      "platform": "x",
+      "input": "99999999999999999999",
+      "error": "BadShape",
+      "note": "The largest 20-digit number is past it too."
     },
     {
       "platform": "x",
@@ -278,6 +311,29 @@
       "input": "583231,",
       "error": "BadCharacter",
       "note": "Nor is the terminator after it."
+    },
+    {
+      "platform": "github",
+      "input": "18446744073709551615",
+      "idNode": "0xdaaed93a4b3862ac845bdc7e3db729492757f8c0b53c6572e6897d9ae0ff54fd",
+      "note": "2^64-1, the largest id."
+    },
+    {
+      "platform": "github",
+      "input": "0",
+      "error": "BadShape"
+    },
+    {
+      "platform": "github",
+      "input": "0583231",
+      "error": "BadShape",
+      "note": "A leading zero is a second spelling of 583231."
+    },
+    {
+      "platform": "github",
+      "input": "18446744073709551616",
+      "error": "BadShape",
+      "note": "2^64 has 20 digits but is past the largest id."
     },
     {
       "platform": "github",

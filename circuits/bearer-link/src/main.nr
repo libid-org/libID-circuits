@@ -290,6 +290,96 @@ fn an_id_with_its_leading_whitespace_is_refused() {
     c.run();
 }
 
+// REQ-PLAT-06: an id is ^[1-9][0-9]{0,19}$ with a value at most 2^64-1. The
+// accepted cases' commitment and node are hashlib's over blinder(32) and
+// "libid.x.user-id"; a refused id fails before any commitment is opened.
+
+#[test]
+fn the_smallest_id_proves() {
+    let mut c = Case::x();
+    c.id = padded("1".as_bytes());
+    c.id_len = 1;
+    c.id_commitment =
+        [105462273466397901505493933603468085821, 183790191155108234816597641381568905717];
+    c.id_node = [163366725920276907683651916792196721096, 205013574783973764687014679168829079781];
+    c.run();
+}
+
+#[test]
+fn the_largest_id_proves() {
+    // 2^64-1 fills the 20-digit buffer.
+    let mut c = Case::x();
+    c.id = padded("18446744073709551615".as_bytes());
+    c.id_len = 20;
+    c.id_commitment =
+        [240984954078423482936928716307432112608, 325286706506747342280976474037209628182];
+    c.id_node = [325931396612102557796083987101892226913, 112619755161855084983135198859414720581];
+    c.run();
+}
+
+#[test(should_fail_with = "id shape not allowed")]
+fn a_zero_id_is_refused() {
+    let mut c = Case::x();
+    c.id = padded("0".as_bytes());
+    c.id_len = 1;
+    c.run();
+}
+
+#[test(should_fail_with = "id shape not allowed")]
+fn an_id_with_leading_zeros_is_refused() {
+    let mut c = Case::github();
+    c.id = padded("007".as_bytes());
+    c.id_len = 3;
+    c.run();
+}
+
+#[test(should_fail_with = "id shape not allowed")]
+fn an_id_with_a_leading_zero_is_refused() {
+    let mut c = Case::x();
+    c.id = padded("0123".as_bytes());
+    c.id_len = 4;
+    c.run();
+}
+
+#[test(should_fail_with = "id shape not allowed")]
+fn an_id_one_past_the_bound_is_refused() {
+    let mut c = Case::x();
+    c.id = padded("18446744073709551616".as_bytes());
+    c.id_len = 20;
+    c.run();
+}
+
+#[test(should_fail_with = "id shape not allowed")]
+fn the_largest_twenty_digit_id_is_refused() {
+    let mut c = Case::github();
+    c.id = padded("99999999999999999999".as_bytes());
+    c.id_len = 20;
+    c.run();
+}
+
+#[test(should_fail_with = "id too long")]
+fn a_twenty_one_digit_id_is_refused() {
+    let mut c = Case::x();
+    c.id = [0x31; MAX_ID_BEARER_LINK];
+    c.id_len = 21;
+    c.run();
+}
+
+#[test(should_fail_with = "id is empty")]
+fn an_empty_id_is_refused() {
+    let mut c = Case::x();
+    c.id_len = 0;
+    c.run();
+}
+
+#[test(should_fail_with = "id byte not allowed")]
+fn an_id_with_a_letter_is_refused() {
+    let mut c = Case::x();
+    c.id = padded("12a4".as_bytes());
+    c.id_len = 4;
+    c.run();
+}
+
 #[test(should_fail_with = "id commitment mismatch")]
 fn swapped_value_commitments_are_refused() {
     let mut c = Case::x();

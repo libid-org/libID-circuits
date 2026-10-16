@@ -20,7 +20,7 @@ support, which fits libID's client-side proving use case almost perfectly.
 
 | Circuit | Package | Proves |
 |---|---|---|
-| `circuits/bearer-link` | `bearer_link` | X's and GitHub's bearer link plus the account as keys. The identity response reveals only the anchors around the id and the handle; the circuit opens the two committed values as the platform sent them, checks that each is one whole JSON token (an id of digits, a handle of printable ASCII without `"` or `\`), folds the handle, and outputs `idNode = SHA256(idTag \|\| id)` and `handleNode = SHA256(handleTag \|\| fold(handle))` under the tags the verifier passes. 16 public inputs: the two bearer commitments, the id and handle commitments and the two nodes, each as two 16-byte halves, then each tag as one Field with its length. Neither value appears in plaintext; see the note below the table. The bearer is at most 128 bytes, the handle 39, the id 20 digits. |
+| `circuits/bearer-link` | `bearer_link` | X's and GitHub's bearer link plus the account as keys. The identity response reveals only the anchors around the id and the handle; the circuit opens the two committed values as the platform sent them, checks that each is one whole JSON token (an id of digits under REQ-PLAT-06, `^[1-9][0-9]{0,19}$` with a value at most 2^64-1; a handle of printable ASCII without `"` or `\`), folds the handle, and outputs `idNode = SHA256(idTag \|\| id)` and `handleNode = SHA256(handleTag \|\| fold(handle))` under the tags the verifier passes. 16 public inputs: the two bearer commitments, the id and handle commitments and the two nodes, each as two 16-byte halves, then each tag as one Field with its length. Neither value appears in plaintext; see the note below the table. The bearer is at most 128 bytes, the handle 39, the id 20 digits. |
 | `circuits/oidc-google` | `oidc_google` | Possession of a Google OIDC JWT: verifies the RSASSA-PKCS1-v1_5 signature over `header.payload` and exposes the Authorization Digest carried in `nonce`, `SHA256(aud)`, the id node `SHA256("libid.google.user-id" \|\| sub)`, the handle node `SHA256("libid.google.handle" \|\| fold(email))` (the `sub` and the address are not disclosed; each is checked to be one JSON string and the address is folded in the circuit), `exp`, and the modulus that verified. The Platform Verifier alone decides whether that modulus is trusted. |
 
 A node is an unsalted tagged SHA-256, so anyone can hash a guess and compare.
@@ -33,7 +33,9 @@ CI enforces `nargo fmt --check` on every package.
 `lib/identity` is the library the identity circuits share: commitment
 openings, the tagged node hash, the token checks and the fold, and
 `identity_link`, the relation bearer-link runs. A circuit checks that a value
-is exactly the token the platform sent; its format is the platform's.
+is exactly the token the platform sent; a handle's format is the platform's,
+and an X or GitHub id is REQ-PLAT-06's `^[1-9][0-9]{0,19}$` with a value at
+most 2^64-1 (`check_id`).
 
 The platform table is this repository's. `lib/identity/platforms.json` holds
 each platform's node tags, the circuits' buffers and whether its id is

@@ -227,7 +227,10 @@ NOIR_ERRORS = {
     "Empty": "is empty",
     "TooLong": "too long",
     "BadCharacter": "byte not allowed",
+    "BadShape": "shape not allowed",
 }
+# The refusal only a decimal id can earn: its grammar is REQ-PLAT-06's.
+DECIMAL_ONLY_ERROR = "BadShape"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -287,7 +290,7 @@ class IdVector:
 
     def check(self, platform: Platform, errors: set[str]) -> None:
         """An accepted case's node is SHA256(tag || input); a refused case
-        names a known error and carries none."""
+        names a known error, one a decimal id can earn, and carries none."""
         if self.accepted:
             want = node(platform.userIdTag, self.input)
             if self.idNode != want:
@@ -295,6 +298,8 @@ class IdVector:
         else:
             if self.error not in errors:
                 raise SystemExit(f"ERROR: {self.platform} {self.input!r}: unknown error kind {self.error!r}")
+            if self.error == DECIMAL_ONLY_ERROR and not platform.decimal_id:
+                raise SystemExit(f"ERROR: {self.platform} {self.input!r}: {self.error} needs a decimal id")
             if self.idNode:
                 raise SystemExit(f"ERROR: refused {self.platform} {self.input!r} carries idNode")
 

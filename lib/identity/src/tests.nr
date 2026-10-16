@@ -2,8 +2,8 @@
 
 use crate::{
     BLINDER_LEN, check_id, constrain_bearer, fixed_node_halves, fold_handle, hash_commit,
-    MAX_BEARER_LEN, MAX_HANDLE_BEARER_LINK, MAX_ID_BEARER_LINK, MAX_TAG_LEN, node_halves, table,
-    tag_of,
+    MAX_BEARER_LEN, MAX_DECIMAL_ID, MAX_DECIMAL_ID_LEN, MAX_HANDLE_BEARER_LINK, MAX_ID_BEARER_LINK,
+    MAX_TAG_LEN, node_halves, table, tag_of,
 };
 use crate::testing::{blinder, padded};
 
@@ -126,6 +126,89 @@ fn independent_blinders_give_different_commitments() {
 }
 
 // --- check_id ---------------------------------------------------------------
+
+#[test]
+fn the_bound_on_a_decimal_id_is_the_largest_u64() {
+    // python3 -c "print(2**64 - 1)"
+    let largest: [u8; MAX_DECIMAL_ID_LEN] = padded("18446744073709551615".as_bytes());
+    assert(MAX_DECIMAL_ID == largest);
+    assert(MAX_DECIMAL_ID_LEN == table::MAX_ID_X);
+    assert(MAX_DECIMAL_ID_LEN == table::MAX_ID_GITHUB);
+}
+
+#[test]
+fn the_smallest_and_largest_decimal_ids_are_accepted() {
+    // REQ-PLAT-06: ^[1-9][0-9]{0,19}$, at most 2^64-1.
+    let smallest: [u8; table::MAX_ID_X] = padded("1".as_bytes());
+    check_id(smallest, 1, table::ID_DECIMAL_X);
+    let fixture: [u8; table::MAX_ID_X] = padded("2244994945".as_bytes());
+    check_id(fixture, 10, table::ID_DECIMAL_X);
+    let largest: [u8; table::MAX_ID_X] = padded("18446744073709551615".as_bytes());
+    check_id(largest, 20, table::ID_DECIMAL_X);
+    // A 19-digit id is below the bound whatever its digits.
+    let widest_short: [u8; table::MAX_ID_X] = padded("9999999999999999999".as_bytes());
+    check_id(widest_short, 19, table::ID_DECIMAL_GITHUB);
+}
+
+#[test(should_fail_with = "id shape not allowed")]
+fn a_zero_id_is_refused() {
+    // A single 0 is a leading zero of nothing.
+    let id: [u8; table::MAX_ID_X] = padded("0".as_bytes());
+    check_id(id, 1, table::ID_DECIMAL_X);
+}
+
+#[test(should_fail_with = "id shape not allowed")]
+fn an_id_with_leading_zeros_is_refused() {
+    let id: [u8; table::MAX_ID_X] = padded("007".as_bytes());
+    check_id(id, 3, table::ID_DECIMAL_X);
+}
+
+#[test(should_fail_with = "id shape not allowed")]
+fn an_id_with_a_leading_zero_is_refused() {
+    let id: [u8; table::MAX_ID_GITHUB] = padded("0123".as_bytes());
+    check_id(id, 4, table::ID_DECIMAL_GITHUB);
+}
+
+#[test(should_fail_with = "id shape not allowed")]
+fn an_id_one_past_the_bound_is_refused() {
+    // 2^64 has 20 digits, so only the compare refuses it.
+    let id: [u8; table::MAX_ID_X] = padded("18446744073709551616".as_bytes());
+    check_id(id, 20, table::ID_DECIMAL_X);
+}
+
+#[test(should_fail_with = "id shape not allowed")]
+fn the_largest_twenty_digit_id_is_refused() {
+    let id: [u8; table::MAX_ID_GITHUB] = padded("99999999999999999999".as_bytes());
+    check_id(id, 20, table::ID_DECIMAL_GITHUB);
+}
+
+#[test(should_fail_with = "id too long")]
+fn a_twenty_one_digit_id_is_refused() {
+    // The buffer holds 20 digits; the claimed length is the dishonest witness's.
+    let id: [u8; table::MAX_ID_X] = [0x31; table::MAX_ID_X];
+    check_id(id, 21, table::ID_DECIMAL_X);
+}
+
+#[test(should_fail_with = "id is empty")]
+fn an_empty_id_is_refused() {
+    let id: [u8; table::MAX_ID_X] = [0; table::MAX_ID_X];
+    check_id(id, 0, table::ID_DECIMAL_X);
+}
+
+#[test(should_fail_with = "id byte not allowed")]
+fn an_id_with_a_letter_is_refused() {
+    let id: [u8; table::MAX_ID_X] = padded("12a4".as_bytes());
+    check_id(id, 4, table::ID_DECIMAL_X);
+}
+
+#[test]
+fn a_string_id_keeps_its_leading_zero() {
+    // The grammar is a decimal id's: a Google sub is opaque.
+    let sub: [u8; table::MAX_ID_GOOGLE] = padded("0123".as_bytes());
+    check_id(sub, 4, table::ID_DECIMAL_GOOGLE);
+    let zero: [u8; table::MAX_ID_GOOGLE] = padded("0".as_bytes());
+    check_id(zero, 1, table::ID_DECIMAL_GOOGLE);
+}
 
 #[test]
 fn the_bytes_past_the_id_change_nothing() {

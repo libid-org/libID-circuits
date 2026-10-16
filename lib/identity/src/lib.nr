@@ -143,7 +143,12 @@ pub fn fold_handle<let MAX: u32>(raw: [u8; MAX], len: u32) -> [u8; MAX] {
     out
 }
 
-/// An id as sent, never folded: decimal digits, or a JSON string's bytes.
+/// The largest decimal id, 2^64-1 (REQ-PLAT-06), and its width in digits.
+pub global MAX_DECIMAL_ID_LEN: u32 = 20;
+pub global MAX_DECIMAL_ID: [u8; MAX_DECIMAL_ID_LEN] = "18446744073709551615".as_bytes();
+
+/// An id as sent, never folded: a JSON string's bytes, or, when `digits`,
+/// REQ-PLAT-06's `^[1-9][0-9]{0,19}$` with a value at most 2^64-1.
 pub fn check_id<let MAX: u32>(raw: [u8; MAX], len: u32, digits: bool) {
     assert(len != 0, "id is empty");
     assert(len <= MAX, "id too long");
@@ -157,6 +162,22 @@ pub fn check_id<let MAX: u32>(raw: [u8; MAX], len: u32, digits: bool) {
             };
             assert(ok, "id byte not allowed");
         }
+    }
+    if digits {
+        // A leading zero, "0" included: a single 0 is a leading zero of nothing.
+        assert(raw[0] != 0x30, "id shape not allowed");
+        // A shorter id is below the bound; one as long compares digit by digit,
+        // since equal-length digit strings order as their numbers do.
+        let mut above = false;
+        let mut decided = false;
+        for i in 0..MAX_DECIMAL_ID_LEN {
+            if (i < MAX) & (i < len) & !decided {
+                let (b, m) = (raw[i], MAX_DECIMAL_ID[i]);
+                above = b > m;
+                decided = b != m;
+            }
+        }
+        assert((len != MAX_DECIMAL_ID_LEN) | !above, "id shape not allowed");
     }
 }
 
