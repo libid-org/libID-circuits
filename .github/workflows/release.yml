@@ -6,8 +6,8 @@ name: Release
 #
 #   libid-circuits-<version>-<circuit>.tar.gz   one per circuit, containing
 #                                               <package>.json, vk, vk_hash,
-#                                               <Contract>.sol,
-#                                               handles-table.nr
+#                                               <Contract>.sol, platforms.json,
+#                                               handles.json
 #   manifest.json                               version, circuits commit,
 #                                               toolchain pins, and
 #                                               sha256 of every tarball and
