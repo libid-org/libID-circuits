@@ -171,7 +171,6 @@ for example to byte-compare an unpacked release against a local `bb`:
 ```sh
 scripts/gen-verifier.sh bearer-link                          # artifacts/bearer-link/BearerLinkHonkVerifier.sol
 scripts/gen-verifier.sh oidc-google --artifacts ~/unpacked   # from a downloaded release's vk
-scripts/gen-verifier.sh oidc-google Verifier.sol --contract-name HonkVerifier
 ```
 
 The verifier is bb's optimized template with zero knowledge (`-t evm
