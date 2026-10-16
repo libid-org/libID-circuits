@@ -4,7 +4,7 @@
 # the release tarball next to the vk it derives from; consumers compile what
 # ships and never run bb themselves.
 #
-#   scripts/gen-verifier.sh <circuit> [<out.sol>] [--artifacts <dir>] [--contract-name X]
+#   scripts/gen-verifier.sh <circuit> [<out.sol>] [--artifacts <dir>]
 #
 #   <circuit>          directory name under circuits/ and <artifacts>/
 #                      (bearer-link, oidc-google)
@@ -13,9 +13,6 @@
 #   --artifacts <dir>  where scripts/build.sh wrote (default ./artifacts);
 #                      point it at an unpacked release to regenerate and
 #                      byte-compare against what shipped
-#   --contract-name X  rename the verifier contract from bb's fixed
-#                      `HonkVerifier` to X; default derived from <circuit>
-#                      (see below)
 #
 # Contract name: bb always emits `HonkVerifier`, and a consumer compiling
 # every verifier in one project needs distinct names, so the contract is
@@ -64,18 +61,16 @@ verifier_name() {
 }
 
 usage() {
-  echo "usage: $0 <circuit> [<out.sol>] [--artifacts <dir>] [--contract-name X]" >&2
+  echo "usage: $0 <circuit> [<out.sol>] [--artifacts <dir>]" >&2
   exit 2
 }
 
 circuit=""
 out=""
 artifacts="$ROOT/artifacts"
-contract_name=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --artifacts) artifacts="${2:?--artifacts needs a directory}"; shift 2 ;;
-    --contract-name) contract_name="${2:?--contract-name needs a value}"; shift 2 ;;
     -*) usage ;;
     *)
       if [[ -z "$circuit" ]]; then
@@ -105,7 +100,7 @@ for entry in "${KNOWN_VERIFIERS[@]}"; do
   fi
 done
 
-[[ -n "$contract_name" ]] || contract_name="$(verifier_name "$circuit")"
+contract_name="$(verifier_name "$circuit")"
 [[ -n "$out" ]] || out="$artifacts/$circuit/$contract_name.sol"
 
 vk="$artifacts/$circuit/vk"
