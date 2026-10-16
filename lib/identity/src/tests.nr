@@ -3,7 +3,7 @@
 use crate::{
     BLINDER_LEN, check_id, constrain_bearer, fixed_node_halves, fold_handle, hash_commit,
     MAX_BEARER_LEN, MAX_HANDLE_BEARER_LINK, MAX_ID_BEARER_LINK, MAX_TAG_LEN, node_halves, table,
-    tag_bytes, tag_of,
+    tag_of,
 };
 use crate::testing::{blinder, padded};
 
@@ -185,9 +185,10 @@ fn fixed_node_halves_agrees_with_node_halves() {
 #[test]
 fn a_packed_tag_is_its_bytes_from_the_top() {
     // python3 -c "print(int.from_bytes(b'libid.x.handle'.ljust(31, b'\0'), 'big'))"
-    let packed = 191546819536254810227069963542963682822352149726751247095476095263271026688;
+    let packed: Field = 191546819536254810227069963542963682822352149726751247095476095263271026688;
     let (tag, _) = tag_of(table::HANDLE_TAG_X);
-    assert(tag_bytes(packed) == tag);
+    let bytes: [u8; MAX_TAG_LEN] = packed.to_be_bytes();
+    assert(bytes == tag);
 }
 
 #[test(should_fail_with = "tag is empty")]
