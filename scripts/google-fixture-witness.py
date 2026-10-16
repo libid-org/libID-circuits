@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import dataclasses
 import hashlib
 import json
 import pathlib
@@ -68,6 +69,35 @@ D = int(
 )
 
 
+@dataclasses.dataclass(frozen=True)
+class Header:
+    """The ID token's JOSE header."""
+
+    alg: str = "RS256"
+    kid: str = "libid-fixture"
+    typ: str = "JWT"
+
+
+@dataclasses.dataclass(frozen=True)
+class Claims:
+    """The ID token's claims, in the order Google writes them."""
+
+    iss: str
+    azp: str
+    aud: str
+    sub: str
+    email: str
+    email_verified: bool
+    nonce: str
+    iat: int
+    exp: int
+
+
+def compact_json(document: object) -> bytes:
+    """A dataclass as the JSON a JWT segment carries: no spaces."""
+    return json.dumps(dataclasses.asdict(document), separators=(",", ":")).encode()
+
+
 def b64url(data: bytes) -> bytes:
     return base64.urlsafe_b64encode(data).rstrip(b"=")
 
@@ -95,21 +125,20 @@ def main() -> int:
 
     assert N.bit_length() == MOD_BITS and pow(pow(2, E, N), D, N) == 2
     nonce = b64url(DIGEST).decode()
-    header = b'{"alg":"RS256","kid":"libid-fixture","typ":"JWT"}'
-    payload = json.dumps(
-        {
-            "iss": "https://accounts.google.com",
-            "azp": AUD,
-            "aud": AUD,
-            "sub": SUB,
-            "email": EMAIL,
-            "email_verified": True,
-            "nonce": nonce,
-            "iat": IAT,
-            "exp": EXP,
-        },
-        separators=(",", ":"),
-    ).encode()
+    header = compact_json(Header())
+    payload = compact_json(
+        Claims(
+            iss="https://accounts.google.com",
+            azp=AUD,
+            aud=AUD,
+            sub=SUB,
+            email=EMAIL,
+            email_verified=True,
+            nonce=nonce,
+            iat=IAT,
+            exp=EXP,
+        )
+    )
     signing_input = b64url(header) + b"." + b64url(payload)
     signature = pkcs1_sha256(signing_input, N, D)
 

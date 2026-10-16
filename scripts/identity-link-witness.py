@@ -18,6 +18,7 @@ import hashlib
 import json
 import pathlib
 import sys
+import typing
 
 sys.dont_write_bytecode = True
 import identity_table  # noqa: E402  (beside this script)
@@ -29,84 +30,93 @@ BEARER_LINK = identity_table.ROOT / "circuits" / "bearer-link"
 
 toml_array = functools.partial(identity_table.toml_array, quoted=True)
 
+T = typing.TypeVar("T")
+
+
+def of_json(cls: type[T], doc: object, where: str) -> T:
+    """`doc` as the dataclass `cls`: one member per field, nested dataclasses
+    recursively, members the class does not declare ignored. `where` names
+    the document in a refusal."""
+    fields = dataclasses.fields(cls)
+    if not isinstance(doc, dict):
+        raise SystemExit(f"{where}: expected an object with {', '.join(f.name for f in fields)}")
+    hints = typing.get_type_hints(cls)
+    members = {}
+    for field in fields:
+        if field.name not in doc:
+            raise SystemExit(f"{where}: no `{field.name}`")
+        kind = hints[field.name]
+        value = doc[field.name]
+        if dataclasses.is_dataclass(kind):
+            value = of_json(kind, value, f"{where}.{field.name}")
+        elif not isinstance(value, kind):
+            raise SystemExit(f"{where}.{field.name}: expected {kind.__name__}")
+        members[field.name] = value
+    return cls(**members)
+
 
 @dataclasses.dataclass(frozen=True)
 class Opening:
-    """A committed value with the blinder that opens its commitment."""
+    """A witness entry as libid-rs writes it: a value, the blinder beside it
+    and the 0x-hex commitment they open."""
 
-    value: bytes
-    blinder: bytes
-    commitment: bytes
+    value: str
+    blinder: str
+    commitment: str
 
-    @classmethod
-    def of(cls, name: str, entry: object) -> Opening:
-        """The witness entry `name`, checked to open its own commitment."""
-        if not isinstance(entry, dict) or not {"value", "blinder", "commitment"} <= entry.keys():
-            raise SystemExit(f"witness entry `{name}` needs value, blinder and commitment")
-        opening = cls(
-            entry["value"].encode(),
-            bytes.fromhex(entry["blinder"].removeprefix("0x")),
-            bytes.fromhex(entry["commitment"].removeprefix("0x")),
-        )
+    def plaintext(self) -> bytes:
+        return self.value.encode()
+
+    def blinder_bytes(self) -> bytes:
+        return bytes.fromhex(self.blinder.removeprefix("0x"))
+
+    def commitment_bytes(self) -> bytes:
+        return bytes.fromhex(self.commitment.removeprefix("0x"))
+
+    def check(self, name: str) -> None:
+        """Refuse a blinder of another width than the circuit's, or a
+        commitment the value and blinder do not open."""
         width = identity_table.integer("BLINDER_LEN", identity_table.LIB)
-        if len(opening.blinder) != width:
-            raise SystemExit(
-                f"witness entry `{name}`: the blinder is {len(opening.blinder)} bytes; the circuit takes {width}"
-            )
-        if hashlib.sha256(opening.value + opening.blinder).digest() != opening.commitment:
+        blinder = self.blinder_bytes()
+        if len(blinder) != width:
+            raise SystemExit(f"witness entry `{name}`: the blinder is {len(blinder)} bytes; the circuit takes {width}")
+        if hashlib.sha256(self.plaintext() + blinder).digest() != self.commitment_bytes():
             raise SystemExit(
                 f"witness entry `{name}`: commitment is not SHA256(value || blinder); "
                 "check the fixture was not edited"
             )
-        return opening
 
 
 @dataclasses.dataclass(frozen=True)
 class Witness:
-    """A synthetic identity-link witness: the platform and its four openings."""
+    """An identity-link witness: the platform and the four openings a ceremony commits."""
 
     platform: str
     token_bearer: Opening
     identity_bearer: Opening
-    user_id: Opening
+    id: Opening
     handle: Opening
 
-    @classmethod
-    def load(cls, path: pathlib.Path) -> Witness:
-        """The witness in `path`, a session file marked `"synthetic": true`."""
-        doc = json.loads(path.read_text())
-        provenance = doc.get("provenance") if isinstance(doc, dict) else None
-        witness = doc.get("identity_link_witness") if isinstance(doc, dict) else None
-        if not (isinstance(provenance, dict) and provenance.get("synthetic") is True and isinstance(witness, dict)):
+    def check(self) -> None:
+        """Refuse a platform bearer-link does not prove, an entry that does
+        not open, or two sessions with different bearers."""
+        if self.platform not in PROVER_FILES:
             raise SystemExit(
-                f"{path}: not a synthetic session file (an `identity_link_witness` object "
-                'beside `"provenance": {"synthetic": true}`); only synthetic fixtures are witnessed here'
-            )
-        platform = witness.get("platform")
-        if platform not in PROVER_FILES:
-            raise SystemExit(
-                f"{path}: platform {platform!r} has no bearer-link circuit; "
+                f"platform {self.platform!r} has no bearer-link circuit; "
                 f"this script writes witnesses for {', '.join(PROVER_FILES)} only"
             )
-        token_bearer = Opening.of("token_bearer", witness.get("token_bearer"))
-        identity_bearer = Opening.of("identity_bearer", witness.get("identity_bearer"))
-        if token_bearer.value != identity_bearer.value:
+        for name in ("token_bearer", "identity_bearer", "id", "handle"):
+            getattr(self, name).check(name)
+        if self.token_bearer.value != self.identity_bearer.value:
             raise SystemExit(
                 "witness entries `token_bearer` and `identity_bearer` carry different bearers; "
                 "both sessions of one ceremony must use the same token"
             )
-        return cls(
-            platform,
-            token_bearer,
-            identity_bearer,
-            Opening.of("id", witness.get("id")),
-            Opening.of("handle", witness.get("handle")),
-        )
 
     def prover_toml(self, source: str) -> str:
         """The bearer-link Prover.toml for this witness; `source` names it in the header."""
         suffix = self.platform.upper()
-        bearer = self.token_bearer.value
+        bearer = self.token_bearer.plaintext()
         max_bearer = identity_table.integer("MAX_BEARER_LEN", identity_table.LIB)
         if len(bearer) > max_bearer:
             raise SystemExit(
@@ -117,8 +127,8 @@ class Witness:
         max_handle = identity_table.integer(f"MAX_HANDLE_{suffix}")
         id_tag = identity_table.byte_array(f"USER_ID_TAG_{suffix}")
         handle_tag = identity_table.byte_array(f"HANDLE_TAG_{suffix}")
-        user_id = self.user_id.value
-        handle = self.handle.value
+        user_id = self.id.plaintext()
+        handle = self.handle.plaintext()
         folded = identity_table.fold(handle)
         halves = identity_table.halves
 
@@ -127,18 +137,18 @@ class Witness:
             f"# a synthetic {self.platform} ceremony witness. scripts/check-verifiers.sh proves it.",
             f"bearer = {toml_array(identity_table.padded('token_bearer', bearer, max_bearer))}",
             f'bearer_len = "{len(bearer)}"',
-            f"blinder_token = {toml_array(self.token_bearer.blinder)}",
-            f"blinder_identity = {toml_array(self.identity_bearer.blinder)}",
+            f"blinder_token = {toml_array(self.token_bearer.blinder_bytes())}",
+            f"blinder_identity = {toml_array(self.identity_bearer.blinder_bytes())}",
             f"id = {toml_array(identity_table.padded('id', user_id, max_id))}",
             f'id_len = "{len(user_id)}"',
-            f"blinder_id = {toml_array(self.user_id.blinder)}",
+            f"blinder_id = {toml_array(self.id.blinder_bytes())}",
             f"handle = {toml_array(identity_table.padded('handle', handle, max_handle))}",
             f'handle_len = "{len(handle)}"',
-            f"blinder_handle = {toml_array(self.handle.blinder)}",
-            f"token_commitment = {toml_array(halves(self.token_bearer.commitment))}",
-            f"identity_commitment = {toml_array(halves(self.identity_bearer.commitment))}",
-            f"id_commitment = {toml_array(halves(self.user_id.commitment))}",
-            f"handle_commitment = {toml_array(halves(self.handle.commitment))}",
+            f"blinder_handle = {toml_array(self.handle.blinder_bytes())}",
+            f"token_commitment = {toml_array(halves(self.token_bearer.commitment_bytes()))}",
+            f"identity_commitment = {toml_array(halves(self.identity_bearer.commitment_bytes()))}",
+            f"id_commitment = {toml_array(halves(self.id.commitment_bytes()))}",
+            f"handle_commitment = {toml_array(halves(self.handle.commitment_bytes()))}",
             f"id_node = {toml_array(halves(hashlib.sha256(id_tag + user_id).digest()))}",
             f"handle_node = {toml_array(halves(hashlib.sha256(handle_tag + folded).digest()))}",
             f'id_tag = "{identity_table.packed_tag(id_tag)}"',
@@ -147,6 +157,32 @@ class Witness:
             f'handle_tag_len = "{len(handle_tag)}"',
         ]
         return "\n".join(lines) + "\n"
+
+
+@dataclasses.dataclass(frozen=True)
+class Provenance:
+    """Where a vendored fixture comes from; `synthetic` marks one made without
+    a real account or bearer."""
+
+    synthetic: bool
+    source: str
+
+
+@dataclasses.dataclass(frozen=True)
+class Fixture:
+    """A vendored witness file, fixtures/<platform>-identity-link-witness.json."""
+
+    provenance: Provenance
+    identity_link_witness: Witness
+
+    @classmethod
+    def load(cls, path: pathlib.Path) -> Fixture:
+        """The fixture in `path`, synthetic and with a witness that checks."""
+        fixture = of_json(cls, json.loads(path.read_text()), str(path))
+        if not fixture.provenance.synthetic:
+            raise SystemExit(f"{path}: `provenance.synthetic` is not true; only synthetic fixtures are witnessed here")
+        fixture.identity_link_witness.check()
+        return fixture
 
 
 def source_label(path: pathlib.Path) -> str:
@@ -163,7 +199,7 @@ def main() -> int:
     parser.add_argument("--out", type=pathlib.Path, help="default: the platform's committed prover file")
     args = parser.parse_args()
 
-    witness = Witness.load(args.witness)
+    witness = Fixture.load(args.witness).identity_link_witness
     out = args.out or BEARER_LINK / PROVER_FILES[witness.platform]
     out.write_text(witness.prover_toml(source_label(args.witness)))
     print(f"wrote {out}")

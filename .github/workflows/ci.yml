@@ -204,28 +204,7 @@ jobs:
       # The vendored witnesses are the session fixtures' `identity_link_witness`
       # members, and oidc-google's nonce is their Authorization Digest.
       - name: Fixtures match libID-contracts' session fixtures
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import importlib.util, json, pathlib, sys
-
-          sessions = pathlib.Path("libid-contracts/solidity/contracts/ceremony/test/fixtures")
-          sys.path.insert(0, "scripts")  # google-fixture-witness.py imports identity_table beside it
-          spec = importlib.util.spec_from_file_location("google_fixture", "scripts/google-fixture-witness.py")
-          google = importlib.util.module_from_spec(spec)
-          spec.loader.exec_module(google)
-          failed = False
-          for platform in ("x", "github"):
-              session = json.loads((sessions / f"{platform}-ceremony-session.json").read_text())
-              vendored = json.loads(pathlib.Path(f"fixtures/{platform}-identity-link-witness.json").read_text())
-              if vendored["identity_link_witness"] != session["identity_link_witness"]:
-                  print(f"::error::fixtures/{platform}-identity-link-witness.json differs from {platform}-ceremony-session.json's identity_link_witness; copy it again")
-                  failed = True
-              if session["authorization_digest"] != "0x" + google.DIGEST.hex():
-                  print(f"::error::scripts/google-fixture-witness.py's DIGEST differs from {platform}-ceremony-session.json's authorization_digest {session['authorization_digest']}")
-                  failed = True
-          sys.exit(failed)
-          PY
+        run: python3 scripts/check-fixtures.py libid-contracts
 
   # ---------------------------------------------------------------------------
   # DCO: every commit carries a Signed-off-by trailer, as CONTRIBUTING.md
