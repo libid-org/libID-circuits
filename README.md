@@ -52,7 +52,7 @@ table.
 `profiles.json` this table must match. CI fetches that commit and runs its
 `scripts/regen-identity-handles.py --compare-noir` against
 `lib/identity/src/table.nr`, and `--compare-noir-tests` against
-`lib/identity/src/table_tests.nr`. At the same commit it checks that
+`lib/identity/src/table_tests.nr`. At the same commit `scripts/check-fixtures.py` checks that
 `fixtures/{x,github}-identity-link-witness.json` hold the
 `identity_link_witness` members of
 `solidity/contracts/ceremony/test/fixtures/{x,github}-ceremony-session.json`,
