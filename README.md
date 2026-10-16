@@ -20,13 +20,52 @@ support, which fits libID's client-side proving use case almost perfectly.
 
 | Circuit | Package | Proves |
 |---|---|---|
-| `circuits/bearer-link` | `bearer_link` | One hidden OAuth bearer opens both of a ceremony's blinded commitments — the token session's and the identity session's. Exactly two public inputs and nothing else: the credential never leaves the circuit, and the two sessions are tied together without publishing anything that identifies them. Serves X and GitHub, whose statements are byte-identical. |
-| `circuits/oidc-google` | `oidc_google` | Possession of a Google OIDC JWT: verifies the RSASSA-PKCS1-v1_5 signature over `header.payload` and exposes the Authorization Digest carried in `nonce`, `SHA256(aud)`, the canonical `userId` `SHA256("libid.google-user-id" \|\| sub)` (the `sub` itself stays private), the raw `email` bytes, `exp`, and the modulus that verified. The Platform Verifier alone decides whether that modulus is trusted. |
+| `circuits/bearer-link` | `bearer_link` | X's and GitHub's bearer link plus the account as keys. The identity response reveals only the anchors around the id and the handle; the circuit opens the two committed values as the platform sent them, checks that each is one whole JSON token (an id of digits, a handle of printable ASCII without `"` or `\`), folds the handle, and outputs `idNode = SHA256(idTag \|\| id)` and `handleNode = SHA256(handleTag \|\| fold(handle))` under the tags the verifier passes. 16 public inputs: the two bearer commitments, the id and handle commitments and the two nodes, each as two 16-byte halves, then each tag as one Field with its length. Neither value appears in plaintext; see the note below the table. The bearer is at most 128 bytes, the handle 39, the id 20 digits. |
+| `circuits/oidc-google` | `oidc_google` | Possession of a Google OIDC JWT: verifies the RSASSA-PKCS1-v1_5 signature over `header.payload` and exposes the Authorization Digest carried in `nonce`, `SHA256(aud)`, the id node `SHA256("libid.google.user-id" \|\| sub)`, the handle node `SHA256("libid.google.handle" \|\| fold(email))` (the `sub` and the address are not disclosed; each is checked to be one JSON string and the address is folded in the circuit), `exp`, and the modulus that verified. The Platform Verifier alone decides whether that modulus is trusted. |
 
-Sources were extracted byte-verbatim from the original monorepo and then
-formatted once with `nargo fmt` (verified to leave the vk byte-identical;
-only debug metadata in the ACIR json moves); CI enforces `nargo fmt --check`
-from there on.
+A node is an unsalted tagged SHA-256, so anyone can hash a guess and compare.
+The id and handle are not disclosed, which is weaker than secret. In the
+bearer-link flows their byte lengths are public. GitHub ids are sequential, so
+a GitHub id node is effectively public.
+
+CI enforces `nargo fmt --check` on every package.
+
+`lib/identity` is the library the identity circuits share: commitment
+openings, the tagged node hash, the token checks and the fold, and
+`identity_link`, the relation bearer-link runs. A circuit checks that a value
+is exactly the token the platform sent; its format is the platform's.
+
+The platform table is this repository's. `lib/identity/platforms.json` holds
+each platform's node tags, the circuits' buffers and whether its id is
+decimal; `lib/identity/handles.json` holds the shared vector table every
+language runs. `scripts/identity_table.py` generates the constants,
+`src/table.nr`, and one test per vector, `src/table_tests.nr`, from them:
+
+```sh
+scripts/identity_table.py          # with nargo on PATH; writes both files
+scripts/identity_table.py --check  # what CI runs
+```
+
+Every release ships both JSON files beside each circuit's verifier, and
+[libID-contracts] generates its Solidity, Rust and TypeScript tables from the
+shipped copies, so an edit here reaches every language through the release
+it pins.
+
+`scripts/identity-link-witness.py` writes a `bearer-link` prover file from a
+synthetic X or GitHub identity-link witness. The committed
+`circuits/bearer-link/Prover.toml` (X) and `Prover-github.toml` are written from
+`fixtures/x-identity-link-witness.json` and
+`fixtures/github-identity-link-witness.json`: the `identity_link_witness`
+members of libID-contracts' synthetic
+`solidity/contracts/ceremony/test/fixtures/{x,github}-ceremony-session.json`
+(libid-rs' `cargo run -p libid-tlsn --example ceremony_fixtures`), whose
+handles (`Alice_1`, `OctoCat`) exercise the fold, each beside a `provenance`
+object with `"synthetic": true`. CI regenerates both and fails on a
+difference. After copying a fixture, `scripts/check-fixtures.py
+<libID-contracts checkout>` checks both files and
+`scripts/google-fixture-witness.py`'s `DIGEST` against those sessions.
+
+The script refuses a fixture without that marker.
 
 ## Toolchain
 
@@ -83,7 +122,9 @@ refuse to run under any other version.
   (`bb write_solidity_verifier -t evm --optimized` on the vk, see
   "Regenerating a Solidity verifier"), the contract named after the circuit
   directory: `bearer-link/BearerLinkHonkVerifier.sol`,
-  `oidc-google/OidcGoogleHonkVerifier.sol`.
+  `oidc-google/OidcGoogleHonkVerifier.sol`;
+- `platforms.json` and `handles.json` — the platform table and the vectors
+  the circuit was built from, copied from `lib/identity/`.
 
 ```sh
 scripts/build.sh              # build into ./artifacts/ (requires the pinned toolchain)
@@ -104,7 +145,6 @@ for example to byte-compare an unpacked release against a local `bb`:
 ```sh
 scripts/gen-verifier.sh bearer-link                          # artifacts/bearer-link/BearerLinkHonkVerifier.sol
 scripts/gen-verifier.sh oidc-google --artifacts ~/unpacked   # from a downloaded release's vk
-scripts/gen-verifier.sh oidc-google Verifier.sol --contract-name HonkVerifier
 ```
 
 The verifier is bb's optimized template with zero knowledge (`-t evm
@@ -114,7 +154,7 @@ the target is never `evm-no-zk`.
 
 The interchange format is raw `bb write_solidity_verifier` output plus
 exactly one rewrite: the contract is renamed off bb's fixed `HonkVerifier`
-to `<Circuit>HonkVerifier` (both verifiers must compile in one project). The
+to `<Circuit>HonkVerifier` (the verifiers compile in one project). The
 names the current circuits ship under are pinned in the script and checked
 on every run, so renaming a circuit directory fails the build instead of
 silently renaming the contract consumers compile. `forge fmt` is the
@@ -145,7 +185,7 @@ Both fit EIP-170's runtime size limit on the legacy pipeline with the
 optimizer on.
 
 `scripts/check-verifiers.sh` compiles every verifier that way, then proves
-each circuit's committed witness, `circuits/<circuit>/Prover.toml`: the
+each circuit's committed witnesses, `circuits/<circuit>/Prover*.toml`: each
 proof must verify with `bb verify` and with the verifier deployed to anvil,
 and fail with one bit flipped. CI runs it after every build. It needs
 Foundry (`forge`, `anvil`, `cast`) besides the pinned nargo and bb:
@@ -154,9 +194,10 @@ Foundry (`forge`, `anvil`, `cast`) besides the pinned nargo and bb:
 scripts/build.sh && scripts/check-verifiers.sh
 ```
 
-`circuits/oidc-google/Prover.toml` is a Google-shaped ID token signed by a
-synthetic RSA-2048 key, for the fixture `sub` 100000000000000000001 and
-`email` fixture@example.com.
+`circuits/oidc-google/Prover.toml` is written by
+`scripts/google-fixture-witness.py`: a Google-shaped ID token signed by a
+synthetic RSA-2048 key, its constants in the script, for the fixture `sub` 100000000000000000001 and
+`email` Fixture@Example.com, mixed case so the fold is exercised.
 
 ## Releases
 
@@ -164,8 +205,9 @@ Publishing a GitHub Release tagged `v<version>` builds the artifacts from
 source with the pinned toolchain (`scripts/build.sh`) and attaches:
 
 - `libid-circuits-<version>-<circuit>.tar.gz` — one per circuit, containing
-  `<package>.json`, `vk`, `vk_hash`, `<Contract>.sol`;
-- `manifest.json` — `{version, tag, toolchain: {nargo, bb}, tarballs:
+  `<package>.json`, `vk`, `vk_hash`, `<Contract>.sol`, `platforms.json` and
+  `handles.json`;
+- `manifest.json` — `{version, tag, commit, toolchain: {nargo, bb}, tarballs:
   {<tarball>: {sha256, files: {<name>: sha256}}}}`.
 
 ## Consuming a release
@@ -177,25 +219,15 @@ against its entry in `files`, run `forge fmt` over it under your own
 No `bb`, no nargo: the verifier is derived here, once, by the toolchain the
 manifest names.
 
+`platforms.json` and `handles.json` in the same tarball, checked against
+`files` the same way, are the table the circuit was built from: generate your
+tags, buffers and vectors from them instead of keeping a copy. oidc-google's
+tags are compiled in; bearer-link takes its tags as public inputs, so the
+verifying contract must pass the tags `platforms.json` names.
+
 Verification keys under the pinned toolchain (nargo 1.0.0-rc.3, bb 6.0.0-rc.2):
 
 | Circuit | vk_hash |
 |---|---|
-| `bearer-link` | `0x03d91fecc776e03f12331b31a3231d984a385682fb1a18a841e363cef0624184` |
-| `oidc-google` | `0x1fa1426da50e1a46d0e50035a3307e1c322b54875cbde06339dcf5d8bd043801` |
-
-The Google key has moved three times since the value this section cited before
-2026-08-12: once when the proof was bound to the Authorization Digest
-(REQ-PLAT-16B public inputs), again with the REQ-COMMON-19 /
-REQ-COMMON-19D constraints below, and again when the proof started publishing
-the `userId` digest in place of the `sub` (v0.4.0 shipped
-`0x1b50bbf6d8ea6efc7ecc2547c25b285511704a10d9247466e84045095d9c3f77`).
-
-Both keys moved with the toolchain. Barretenberg 6 proves ROM reads with a
-log-derivative lookup and derives full-width Fiat-Shamir challenges, so a
-circuit's key and verifier differ from bb 5's. v0.5.0, built by nargo
-1.0.0-beta.25 and bb 5.2.0, shipped
-`0x1d161afb536683d31a3e426db0feaa30de8be89cc45510579f361266c20e078f` for
-`bearer-link` and
-`0x29fdabfacc34aac98d8d44158c1f1ba51b3d97da24c82305908ea33bb18c585c` for
-`oidc-google`. The deployed verifiers roll with the next release.
+| `bearer-link` | `0x0ae6b31e32fb572fb6c7de574ed92545dd6c4a81cc62a1d1be1a8c8e58e0e2a3` |
+| `oidc-google` | `0x24f940247d3108dacfc80e7e34b4a5efd0513a7c402a74565c20f099ec2aadba` |

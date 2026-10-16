@@ -1,0 +1,50 @@
+{
+  "note": [
+    "Each platform's node tags and the identity circuits' buffers for it: the",
+    "constants of src/table.nr, which scripts/identity_table.py generates from",
+    "this file. A node is SHA256(tag || value): the id node over the id as the",
+    "platform sent it, the handle node over the folded handle. A tag is raw",
+    "ASCII of 1 to 31 bytes, so bearer-link takes it as one Field; the tags",
+    "are distinct and prefix-free, so no two platforms and no id and handle",
+    "share a node. maxHandle and maxId are the circuits' buffers: a longer",
+    "value is refused, never truncated. idShape is `decimal` for an id of",
+    "digits and `string` for any JSON string.",
+    "",
+    "Every release ships this file beside the verifiers, and libID-contracts",
+    "generates its CeremonyProfile tags and its Rust and TypeScript tables",
+    "from the shipped copy. Changing a value changes what a deployed verifier",
+    "accepts."
+  ],
+  "platforms": [
+    {
+      "platform": "google",
+      "userIdTag": "libid.google.user-id",
+      "handleTag": "libid.google.handle",
+      "maxHandle": 62,
+      "maxId": 31,
+      "idShape": "string",
+      "note": [
+        "The address as proved: no dot is removed, no +tag stripped and no domain",
+        "rewritten. A longer one is refused, not truncated. The id is the OIDC sub."
+      ]
+    },
+    {
+      "platform": "x",
+      "userIdTag": "libid.x.user-id",
+      "handleTag": "libid.x.handle",
+      "maxHandle": 39,
+      "maxId": 20,
+      "idShape": "decimal",
+      "note": "bearer-link's handle buffer, shared with GitHub; an id is a decimal string."
+    },
+    {
+      "platform": "github",
+      "userIdTag": "libid.github.user-id",
+      "handleTag": "libid.github.handle",
+      "maxHandle": 39,
+      "maxId": 20,
+      "idShape": "decimal",
+      "note": "bearer-link's handle buffer, GitHub's 39-byte login; an id is a bare JSON integer."
+    }
+  ]
+}

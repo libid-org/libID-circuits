@@ -19,6 +19,12 @@
 #                   contract named after the circuit (bearer-link ->
 #                   BearerLinkHonkVerifier); see scripts/gen-verifier.sh.
 #                   Ships so that consumers compile it and never run bb.
+#   platforms.json  each platform's node tags, buffers and id shape, the
+#                   source of lib/identity's table.nr
+#   handles.json    the shared vector table, the source of its table_tests.nr
+#
+# and <out>/commit: the circuits commit built, with `-dirty` when the tree has
+# modified or untracked files, or `unknown` outside a readable git work tree.
 #
 # The vk derives from the ACIR bytecode alone, and the Solidity verifier from
 # the vk alone — so a release tarball is the complete, sufficient input for
@@ -26,7 +32,7 @@
 #
 # Path normalization: nargo embeds absolute source paths in the ACIR json's
 # file_map (used only for diagnostics; the bytecode, abi, debug_symbols and
-# hash fields are machine-independent — verified empirically). We rewrite
+# hash fields are machine-independent — verified empirically). It rewrites
 #   <repo root>/…        -> …            (circuit sources)
 #   $HOME/nargo/…        -> nargo/…      (git dependency cache)
 # so the json is byte-reproducible across machines — critical so a
@@ -73,6 +79,20 @@ if [[ "$have_bb" != "$BB_VERSION" ]]; then
   exit 1
 fi
 
+PLATFORMS="$ROOT/lib/identity/platforms.json"
+HANDLES="$ROOT/lib/identity/handles.json"
+
+# Read before building, so build output cannot mark the tree dirty. Unless
+# git reads $ROOT as its own work tree (not a parent's), the commit is `unknown`.
+if [[ "$(git -C "$ROOT" rev-parse --show-toplevel 2>/dev/null)" == "$(cd "$ROOT" && pwd -P)" ]] \
+  && commit="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null)" \
+  && status="$(git -C "$ROOT" status --porcelain 2>/dev/null)"; then
+  [[ -z "$status" ]] || commit="$commit-dirty"
+else
+  commit=unknown
+  echo "warning: git cannot read $ROOT; recording commit 'unknown'." >&2
+fi
+
 # --- Build -------------------------------------------------------------------
 for dir in "$ROOT"/circuits/*/; do
   circuit="$(basename "$dir")"
@@ -106,6 +126,11 @@ for dir in "$ROOT"/circuits/*/; do
   # names the contract after the circuit directory and checks the pinned
   # names, so a renamed directory fails here instead of at a consumer.
   "$ROOT/scripts/gen-verifier.sh" "$circuit" --artifacts "$OUT"
+
+  # The platform table and the vectors the circuit was built from, for
+  # consumers to generate their own tables from.
+  cp "$PLATFORMS" "$HANDLES" "$OUT/$circuit/"
 done
 
-echo "OK: artifacts written to $OUT"
+echo "$commit" > "$OUT/commit"
+echo "OK: artifacts written to $OUT ($commit)"

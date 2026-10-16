@@ -1,9 +1,10 @@
 name: CI
 
 # Two jobs. `circuits` proves that the committed sources build under the
-# pinned toolchain: tests pass, every circuit compiles, every vk generates,
-# and every Solidity verifier generates under its pinned contract name,
-# compiles the way consumers compile it, and verifies a proof of each
+# pinned toolchain: the generated identity table and the witnesses are what
+# their sources generate, tests pass, every circuit compiles, every vk
+# generates, and every Solidity verifier generates under its pinned contract
+# name, compiles the way consumers compile it, and verifies a proof of each
 # committed witness on chain. Nothing built here is kept — artifacts are
 # never committed and ship exclusively as release assets, rebuilt from
 # source by release.yml.
@@ -94,14 +95,10 @@ jobs:
           nargo --version | grep -qF "nargo version = ${NARGO_VERSION}"
           [ "$(bb --version | tail -1)" = "${BB_VERSION}" ]
 
-      # The sources were formatted once after the verbatim extraction from
-      # the original monorepo (verified: formatting leaves the vk
-      # byte-identical; only debug metadata in the ACIR json moves), so the
-      # check holds from here on.
       - name: nargo fmt
         run: |
           set -euo pipefail
-          for dir in circuits/*/; do
+          for dir in lib/*/ circuits/*/; do
             echo "==> $dir"
             (cd "$dir" && nargo fmt --check)
           done
@@ -109,13 +106,38 @@ jobs:
       - name: shellcheck
         run: shellcheck scripts/*.sh
 
-      # Every circuit carries its own #[test] fns in src/main.nr.
+      # lib/identity/src/table.nr and table_tests.nr are what platforms.json
+      # and handles.json generate; a hand edit or a stale regeneration fails
+      # here. nargo formats the generated Noir, so this runs after the
+      # toolchain is on PATH.
+      - name: The identity table is generated
+        run: python3 scripts/identity_table.py --check
+
+      # Every circuit carries its own #[test] fns in src/main.nr, and
+      # lib/identity runs the handles.json vector table (src/table_tests.nr) and
+      # its own tests (src/tests.nr).
       - name: nargo test
         run: |
           set -euo pipefail
-          for dir in circuits/*/; do
+          for dir in lib/*/ circuits/*/; do
             echo "==> $dir"
             (cd "$dir" && nargo test)
+          done
+
+      # Every committed witness is a script's output: oidc-google's from a
+      # synthetic key, the bearer-link ones from the synthetic fixtures in
+      # fixtures/. A regeneration is byte-identical; a drift fails here.
+      - name: Witnesses are reproducible
+        run: |
+          set -euo pipefail
+          python3 scripts/google-fixture-witness.py --out "$RUNNER_TEMP/oidc-google.Prover.toml"
+          diff -u circuits/oidc-google/Prover.toml "$RUNNER_TEMP/oidc-google.Prover.toml"
+          for platform in x github; do
+            toml="Prover.toml"
+            [[ "$platform" == x ]] || toml="Prover-$platform.toml"
+            python3 scripts/identity-link-witness.py "fixtures/$platform-identity-link-witness.json" \
+              --out "$RUNNER_TEMP/$toml"
+            diff -u "circuits/bearer-link/$toml" "$RUNNER_TEMP/$toml"
           done
 
       # Full build: proves every circuit compiles, every vk generates, and

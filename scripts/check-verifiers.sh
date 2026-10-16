@@ -98,40 +98,42 @@ deployer="$(cast rpc --rpc-url "$rpc" eth_accounts | jq -r '.[0]')"
 
 for dir in "$ROOT"/circuits/*/; do
   circuit="$(basename "$dir")"
-  [[ -f "$dir/Prover.toml" ]] || continue
   pkg="$(sed -n 's/^name *= *"\(.*\)"/\1/p' "$dir/Nargo.toml")"
   contract="$(basename "$artifacts/$circuit"/*HonkVerifier.sol .sol)"
-  out="$work/proof-$circuit"
-  echo "==> $circuit: prove circuits/$circuit/Prover.toml"
-
-  (cd "$dir" && nargo execute --silence-warnings "$pkg")
-  bb prove -b "$artifacts/$circuit/$pkg.json" -w "$dir/target/$pkg.gz" \
-    -k "$artifacts/$circuit/vk" -o "$out" -t evm
-  bb verify -p "$out/proof" -i "$out/public_inputs" -k "$artifacts/$circuit/vk" -t evm
-
   bytecode="$(jq -r '.bytecode.object' "$project/out/$contract.sol/$contract.json")"
   verifier="$(cast send --rpc-url "$rpc" --unlocked --from "$deployer" --json \
     --create "$bytecode" | jq -r '.contractAddress')"
+  for toml in "$dir"/Prover*.toml; do
+    [[ -f "$toml" ]] || continue
+    prover="$(basename "$toml" .toml)"
+    out="$work/proof-$circuit-$prover"
+    echo "==> $circuit: prove circuits/$circuit/$prover.toml"
 
-  proof="0x$(perl -0777 -ne 'print unpack("H*", $_)' "$out/proof")"
-  inputs="[$(perl -0777 -ne 'print join(",", map { "0x$_" } unpack("(H64)*", $_))' "$out/public_inputs")]"
-  accepted="$(cast call --rpc-url "$rpc" "$verifier" 'verify(bytes,bytes32[])(bool)' "$proof" "$inputs")"
-  if [[ "$accepted" != true ]]; then
-    echo "error: $contract rejected a proof bb verify accepted" >&2
-    exit 1
-  fi
-  gas="$(cast estimate --rpc-url "$rpc" "$verifier" 'verify(bytes,bytes32[])' "$proof" "$inputs")"
-  echo "$contract accepts the proof: $gas gas"
+    (cd "$dir" && nargo execute --silence-warnings -p "$prover" "$pkg")
+    bb prove -b "$artifacts/$circuit/$pkg.json" -w "$dir/target/$pkg.gz" \
+      -k "$artifacts/$circuit/vk" -o "$out" -t evm
+    bb verify -p "$out/proof" -i "$out/public_inputs" -k "$artifacts/$circuit/vk" -t evm
 
-  # One bit flipped in the middle of the proof.
-  at=$(( ${#proof} / 2 ))
-  tampered="${proof:0:at}$(printf '%x' $(( 0x${proof:at:1} ^ 1 )))${proof:at+1}"
-  if rejected="$(cast call --rpc-url "$rpc" "$verifier" 'verify(bytes,bytes32[])(bool)' "$tampered" "$inputs" 2>/dev/null)" \
-    && [[ "$rejected" == true ]]; then
-    echo "error: $contract accepted a tampered proof" >&2
-    exit 1
-  fi
-  echo "$contract rejects the proof with one bit flipped"
+    proof="0x$(perl -0777 -ne 'print unpack("H*", $_)' "$out/proof")"
+    inputs="[$(perl -0777 -ne 'print join(",", map { "0x$_" } unpack("(H64)*", $_))' "$out/public_inputs")]"
+    accepted="$(cast call --rpc-url "$rpc" "$verifier" 'verify(bytes,bytes32[])(bool)' "$proof" "$inputs")"
+    if [[ "$accepted" != true ]]; then
+      echo "error: $contract rejected a proof bb verify accepted" >&2
+      exit 1
+    fi
+    gas="$(cast estimate --rpc-url "$rpc" "$verifier" 'verify(bytes,bytes32[])' "$proof" "$inputs")"
+    echo "$contract accepts the proof: $gas gas"
+
+    # One bit flipped in the middle of the proof.
+    at=$(( ${#proof} / 2 ))
+    tampered="${proof:0:at}$(printf '%x' $(( 0x${proof:at:1} ^ 1 )))${proof:at+1}"
+    if rejected="$(cast call --rpc-url "$rpc" "$verifier" 'verify(bytes,bytes32[])(bool)' "$tampered" "$inputs" 2>/dev/null)" \
+      && [[ "$rejected" == true ]]; then
+      echo "error: $contract accepted a tampered proof" >&2
+      exit 1
+    fi
+    echo "$contract rejects the proof with one bit flipped"
+  done
 done
 
 echo "OK: every verifier compiles; every committed witness proves and verifies on chain"
