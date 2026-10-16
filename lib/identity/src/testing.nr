@@ -1,5 +1,4 @@
-// Witness builders the identity circuits' tests share. Nothing in a circuit's
-// main calls them, so they compile into no circuit.
+// Witness builders the identity circuits' tests share.
 
 /// The `N`-byte blinder `from, from + 1, ...`.
 pub fn blinder<let N: u32>(from: u8) -> [u8; N] {

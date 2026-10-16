@@ -171,7 +171,7 @@ fn main(
     );
 
     // 5b. `sub` substring at sub_offset in payload_json - the immutable
-    //     Google account id. Only its digest is public.
+    //     Google account id. Only its node is public.
     //     Pattern bytes: `"sub":"` = [34, 115, 117, 98, 34, 58, 34]
     let sub_prefix: [u8; 7] = [34, 115, 117, 98, 34, 58, 34];
     for i in 0..SUB_PREFIX_LEN {
@@ -498,8 +498,8 @@ fn claim_shaped_substring_without_structural_byte_is_rejected() {
     // The shape REQ-COMMON-19's trailing-byte rule exists to reject: bytes
     // that match `"email":"<value>"` exactly but sit inside a longer signed
     // string value, so the byte after the apparent closing quote is ordinary
-    // string content. Every check main() ran before this fix passes here --
-    // the delimiter, the value, the closing quote:
+    // string content. Every check main() runs before the trailing byte passes
+    // here -- the delimiter, the value, the closing quote:
     let payload = "{\"email\":\"a@b.com\" is my address}".as_bytes();
     let email_offset = 1;
     let email_len = 7; // a@b.com

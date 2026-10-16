@@ -31,7 +31,7 @@
 #
 # Path normalization: nargo embeds absolute source paths in the ACIR json's
 # file_map (used only for diagnostics; the bytecode, abi, debug_symbols and
-# hash fields are machine-independent — verified empirically). We rewrite
+# hash fields are machine-independent — verified empirically). It rewrites
 #   <repo root>/…        -> …            (circuit sources)
 #   $HOME/nargo/…        -> nargo/…      (git dependency cache)
 # so the json is byte-reproducible across machines — critical so a
