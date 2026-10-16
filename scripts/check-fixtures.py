@@ -41,7 +41,7 @@ class Session:
 
     @classmethod
     def load(cls, path: pathlib.Path) -> Session:
-        return identity_link.of_json(cls, json.loads(path.read_text()), str(path))
+        return identity_table.of_json(cls, json.loads(path.read_text()), str(path))
 
 
 def main() -> int:
