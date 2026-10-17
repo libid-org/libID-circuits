@@ -1,44 +1,32 @@
 {
   "version": 4,
   "note": [
-    "The shared vector table for the transform a circuit applies before it",
-    "hashes a value into a key. Each platform's tags and the circuits' buffers",
-    "are in platforms.json beside this file. scripts/identity_table.py",
-    "generates the Noir vector tests, src/table_tests.nr, from both files;",
-    "every release ships both, and libID-contracts generates its Rust and",
-    "TypeScript tables from the shipped copies. The transform is hand written",
-    "in each language -- the circuit's is the one that keys a binding -- and",
-    "Rust, TypeScript and Noir run every vector here. Solidity only folds, and",
-    "runs the accepted ones.",
+    "Vectors for the check and fold a circuit applies to a value before it",
+    "hashes it into a node. Tags and buffers are in platforms.json. Each",
+    "language implements the transform. The circuit's keys a binding, so the",
+    "others must match it on every vector.",
     "",
-    "The circuit checks that a value is exactly the JSON token the platform",
-    "sent, nothing about its format: that is the platform's to keep. A handle,",
-    "or an id that is a JSON string, is printable ASCII 0x20-0x7e without '\"'",
-    "or '\\\\', so a commitment between revealed quotes holds one string. An id",
-    "that is a number is decimal digits. A-Z in a handle fold to a-z; nothing",
-    "else changes, nothing is trimmed, and an id is never folded. Each length",
-    "is the circuit's buffer.",
+    "A value is the JSON token exactly as the platform sent it. A handle, or an",
+    "id of idShape `string`, is printable ASCII 0x20-0x7e without '\"' or '\\',",
+    "so a value between revealed quotes is one string. An id of idShape",
+    "`decimal` is digits 0-9. A handle folds A-Z to a-z and nothing else. An id",
+    "is never folded. Nothing is trimmed.",
     "",
-    "A node is SHA256(tag || value): the handle node over the folded handle,",
-    "the id node over the id exactly as the platform sent it. The tags are raw",
-    "ASCII with no separator or length prefix, one per platform and kind, so no",
-    "two platforms and no id and handle share a key. Every handleNode and",
-    "idNode below was computed independently, with Python's hashlib over the",
-    "hand-written output; the generator recomputes each one and refuses a",
-    "table whose stored node disagrees."
+    "A node is SHA256(tag || value), with no separator or length prefix: the",
+    "handle node over the folded handle, the id node over the id as sent."
   ],
   "errors": [
     {
       "key": "Empty",
-      "note": "The value is empty."
+      "note": "Zero bytes."
     },
     {
       "key": "TooLong",
-      "note": "More bytes than the circuit's buffer holds."
+      "note": "More bytes than the platform's buffer in platforms.json."
     },
     {
       "key": "BadCharacter",
-      "note": "A byte that is not part of the token as sent."
+      "note": "A byte outside printable ASCII, a quote, a backslash, or a non-digit in a decimal id."
     }
   ],
   "vectors": [
@@ -47,7 +35,7 @@
       "input": "Alice_1",
       "output": "alice_1",
       "handleNode": "0xe09c4f5bfbbc723bc35701ea9d718a1c5edb29b1ed5bb0cb0fabb3c43d8136af",
-      "note": "Letters fold down; the e2e fixture's handle."
+      "note": "A-Z fold to a-z. The X fixture's handle."
     },
     {
       "platform": "x",
@@ -60,14 +48,14 @@
       "input": " @Alice_1 ",
       "output": " @alice_1 ",
       "handleNode": "0x8d5c2c0bf6e508d2abbd31897b81b8b181c080be353e9a2d637c26ba85ef2eba",
-      "note": "Nothing is trimmed or stripped: the format is the platform's."
+      "note": "Spaces and @ are kept."
     },
     {
       "platform": "x",
       "input": "alice-1",
       "output": "alice-1",
       "handleNode": "0x7c04fb47ef59de41f30f90085b020aa2e0792e3dfdac256f4d5182bc92bd8285",
-      "note": "A hyphen too."
+      "note": "A hyphen is kept."
     },
     {
       "platform": "x",
@@ -90,7 +78,7 @@
       "platform": "x",
       "input": "ali\tce",
       "error": "BadCharacter",
-      "note": "A control byte is not in a JSON string as sent."
+      "note": "A control byte is refused."
     },
     {
       "platform": "x",
@@ -101,7 +89,7 @@
       "platform": "x",
       "input": "ali\u0000ce",
       "error": "BadCharacter",
-      "note": "Nor is a NUL."
+      "note": "A NUL is refused."
     },
     {
       "platform": "x",
@@ -113,20 +101,20 @@
       "platform": "x",
       "input": "a\"b",
       "error": "BadCharacter",
-      "note": "A quote would let a commitment run past its value."
+      "note": "A quote is refused."
     },
     {
       "platform": "x",
       "input": "a\\b",
       "error": "BadCharacter",
-      "note": "A backslash would let a JSON escape reach a node."
+      "note": "A backslash is refused."
     },
     {
       "platform": "github",
       "input": "OctoCat",
       "output": "octocat",
       "handleNode": "0x381fb9d7d3b01214e58b94202ea10f78e169adef68bcc20d40c130deca6dfe74",
-      "note": "The e2e fixture's login."
+      "note": "The GitHub fixture's login."
     },
     {
       "platform": "github",
@@ -139,7 +127,7 @@
       "input": "Octo--Cat-",
       "output": "octo--cat-",
       "handleNode": "0x54230f351727db5a1e9a99db6ed19fdcd5b3a8f0e30eedb7ec22a9e6ccf03c85",
-      "note": "A login outside the current format still keys."
+      "note": "Any hyphen placement is kept: no login format is checked."
     },
     {
       "platform": "github",
@@ -174,7 +162,7 @@
       "input": "A.B+tag@Example.COM",
       "output": "a.b+tag@example.com",
       "handleNode": "0x40169b5cc6400158aeef2a13b73a14fc36e5e1df8595572b8fe282a269f26dd4",
-      "note": "The dot and the +tag stay. Only case folds."
+      "note": "The dot and the +tag are kept. Only A-Z fold."
     },
     {
       "platform": "google",
@@ -187,7 +175,7 @@
       "input": "alice",
       "output": "alice",
       "handleNode": "0x5cd4248474e70fbade127485617bbed78bbbba0fb0688c3871a84cc43de0cd66",
-      "note": "No @ is required: the address is Google's."
+      "note": "No @ is required."
     },
     {
       "platform": "google",
@@ -210,13 +198,13 @@
       "platform": "google",
       "input": "a\"b@example.com",
       "error": "BadCharacter",
-      "note": "A quote is refused: the circuit's closing-quote check depends on it."
+      "note": "A quote is refused."
     },
     {
       "platform": "google",
       "input": "a\\b@example.com",
       "error": "BadCharacter",
-      "note": "A backslash is refused, so no JSON escape reaches a node."
+      "note": "A backslash is refused."
     }
   ],
   "idVectors": [
@@ -234,7 +222,7 @@
       "platform": "x",
       "input": "0123",
       "idNode": "0x68ceaf8a314f0264ed9fb64143960fdedd2a5223c2c87fe65de6232f1cfc9ebf",
-      "note": "Digits as sent: the platform writes its ids."
+      "note": "A leading 0 is kept."
     },
     {
       "platform": "x",
@@ -271,13 +259,13 @@
       "platform": "github",
       "input": " 583231",
       "error": "BadCharacter",
-      "note": "JSON whitespace is not the id."
+      "note": "A leading space is refused."
     },
     {
       "platform": "github",
       "input": "583231,",
       "error": "BadCharacter",
-      "note": "Nor is the terminator after it."
+      "note": "A trailing comma is refused."
     },
     {
       "platform": "github",
@@ -298,13 +286,13 @@
       "platform": "google",
       "input": "a b~Z",
       "idNode": "0xa8ad7455d3d38bcd9b94b444284182fee9766f2403e7fe283c68c4a08123be77",
-      "note": "Any printable ASCII but the quote and the backslash."
+      "note": "Printable ASCII but the quote and the backslash, never folded."
     },
     {
       "platform": "google",
       "input": "0123",
       "idNode": "0x2c6577b6658e7c1cb90c3a3cf63a295bb5543e32cd2429d62cf4d8f0131075b3",
-      "note": "A sub is opaque, so a leading 0 stays."
+      "note": "A leading 0 is kept."
     },
     {
       "platform": "google",

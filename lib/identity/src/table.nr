@@ -6,7 +6,7 @@
 
 /// SHA-256 of the handles.json this file was generated from.
 pub global TABLE_SHA256: str<64> =
-    "d6667cc10b9366933533349b94971cf19007ef656286eff3d8d11fe7e40f5b9b";
+    "eee46dfbd2fd2a776b69092453dff84203fa204015adbf41713963a9c8ca756e";
 
 /// `libid.google.user-id`
 pub global USER_ID_TAG_GOOGLE: [u8; 20] = [
