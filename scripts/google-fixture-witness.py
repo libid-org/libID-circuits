@@ -22,9 +22,9 @@ from identity_table import toml_array  # noqa: E402
 SUB = "100000000000000000001"
 EMAIL = "Fixture@Example.com"
 AUD = "000000000000-libidfixture.apps.googleusercontent.com"
-# The nonce: libid-rs' ceremony fixtures' `authorization_digest` (chain 31337);
-# CI compares it with libID-contracts' copies.
-DIGEST = bytes.fromhex("6beb766c7835d641b3800e8e4c03616d386251c86dcb8b640e59cec9ba42a01f")
+# The nonce: libid-rs' ceremony fixtures' `authorization_digest`;
+# scripts/check-fixtures.py compares it with libID-contracts' copies.
+DIGEST = bytes.fromhex("dacaffd6c7bfe301e73df3a95263b402c94f561a574910968090d65f9ab069e3")
 IAT = 1893452400
 EXP = 1893456000
 
