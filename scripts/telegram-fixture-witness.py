@@ -76,7 +76,7 @@ def witness(c: dict, payload: bytes | None = None, header: dict = HEADER, **over
     sig = google.pkcs1_sha256(si, google.N, google.D)
     rsa.RSAPublicNumbers(google.E, google.N).public_key().verify(
         sig.to_bytes(256, "big"), si, padding.PKCS1v15(), hashes.SHA256())
-    at = lambda k: payload.index(f'"{k}":'.encode()) if f'"{k}":'.encode() in payload else 1  # noqa: E731
+    at = lambda k: max(payload.find(f'"{k}":'.encode()), 1)  # noqa: E731  (a missing claim: 1)
     user, uid = str(c.get("preferred_username", "Brynn_QX")).encode(), str(c["id"]).encode()
     w = dict(
         signing_input=buf(si, SIGNING_INPUT_MAX), signing_input_len=len(si), header_b64_len=len(head),

@@ -214,12 +214,12 @@ fn is_username_byte(b: u8) -> bool {
 fn each_window_holds_its_longest_claim_at_any_alignment() {
     let widths = [ISS_WINDOW, AUD_WINDOW, IAT_WINDOW, ID_WINDOW, USERNAME_WINDOW, NONCE_WINDOW];
     let needs = [
-        36 + 1,
-        7 + AUDIENCE_MAX + 2,
-        6 + MAX_IAT_DIGITS + 1,
-        6 + MAX_ID_TELEGRAM + 2,
-        22 + MAX_HANDLE_TELEGRAM + 2,
-        9 + NONCE_LEN + 2,
+        ISS_PATTERN.len() + 1,
+        AUD_PREFIX.len() + AUDIENCE_MAX + 2,
+        IAT_PREFIX.len() + MAX_IAT_DIGITS + 1,
+        ID_PREFIX.len() + MAX_ID_TELEGRAM + 2,
+        USERNAME_PREFIX.len() + MAX_HANDLE_TELEGRAM + 2,
+        NONCE_PREFIX.len() + NONCE_LEN + 2,
     ];
     for i in 0..6 {
         assert((widths[i] % 3 == 0) & (widths[i] >= needs[i] + 2));
