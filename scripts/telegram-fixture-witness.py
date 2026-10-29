@@ -30,9 +30,11 @@ google = sys.modules["google_witness"] = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(google)
 
 CIRCUIT = it.ROOT / "circuits" / "oidc-telegram"
-# The spec's buffers; the circuit's ABI must take exactly these.
-SIGNING_INPUT_MAX, PAYLOAD_JSON_MAX, AUDIENCE_MAX = 2624, 1920, 20
-ID_MAX, USERNAME_MAX = it.integer("MAX_ID_TELEGRAM"), it.integer("MAX_HANDLE_TELEGRAM")
+MAIN = CIRCUIT / "src" / "main.nr"
+# The spec's buffers: the signing input's is the circuit's.
+SIGNING_INPUT_MAX, PAYLOAD_JSON_MAX = 2624, 1920
+# Each claim's window: whole payload groups from the one holding its offset.
+WINDOWS = {k: it.integer(f"{k.upper()}_WINDOW", MAIN) for k in ("iss", "aud", "iat", "id", "username", "nonce")}
 ID_TAG, HANDLE_TAG = it.byte_array("USER_ID_TAG_TELEGRAM"), it.byte_array("HANDLE_TAG_TELEGRAM")
 PUBLIC = [("authorization_digest", 32), ("audience_hash", 2), ("id_node", 2), ("handle_node", 2), ("iat", 1), ("modulus", 18)]
 
@@ -66,7 +68,8 @@ def halves(data: bytes) -> list[str]:
 
 
 def witness(c: dict, payload: bytes | None = None, header: dict = HEADER, **over) -> dict:
-    """The circuit inputs for token `c` (or raw `payload`), then `over` replaced."""
+    """The circuit inputs for token `c` (or raw `payload`), then `over` replaced;
+    each `<claim>_offset` in `over` moves that claim's window."""
     payload = encode(c) if payload is None else payload
     head = google.b64url(json.dumps(header, separators=(",", ":")).encode())
     si = head + b"." + google.b64url(payload)
@@ -77,17 +80,18 @@ def witness(c: dict, payload: bytes | None = None, header: dict = HEADER, **over
     user, uid = str(c.get("preferred_username", "Brynn_QX")).encode(), str(c["id"]).encode()
     w = dict(
         signing_input=buf(si, SIGNING_INPUT_MAX), signing_input_len=len(si), header_b64_len=len(head),
-        payload_json=buf(payload, PAYLOAD_JSON_MAX), payload_json_len=len(payload),
-        iss_offset=at("iss"), aud_offset=at("aud"), audience_bytes=buf(AUD.encode(), AUDIENCE_MAX),
-        audience_len=len(AUD), iat_offset=at("iat"), iat_len=len(str(IAT)),
-        id_offset=at("id"), id_bytes=buf(uid, ID_MAX), id_len=len(uid),
-        username_offset=at("preferred_username"), username_bytes=buf(user, USERNAME_MAX), username_len=len(user),
-        nonce_offset=at("nonce"), signature=google.limbs(sig), redc=google.limbs((1 << (2 * 2048 + 6)) // google.N),
+        iss_offset=at("iss"), aud_offset=at("aud"), audience_len=len(AUD), iat_offset=at("iat"),
+        iat_len=len(str(IAT)), id_offset=at("id"), id_len=len(uid), username_offset=at("preferred_username"),
+        username_len=len(user), nonce_offset=at("nonce"),
+        signature=google.limbs(sig), redc=google.limbs((1 << (2 * 2048 + 6)) // google.N),
         authorization_digest=list(DIGEST), audience_hash=halves(AUD.encode()),
         id_node=halves(ID_TAG + uid), handle_node=halves(HANDLE_TAG + it.fold(user)), iat=IAT,
         modulus=google.limbs(google.N),
     )
     w.update(over)
+    for k, size in WINDOWS.items():
+        g = w[f"{k}_offset"] // 3 * 3
+        w[f"{k}_window"] = buf(payload[g:g + size], size)
     return w
 
 
@@ -110,7 +114,7 @@ def worst(extra: int = 0, kid: str = "oidc-1-xxxx") -> tuple[dict, dict]:
 def accepts() -> dict[str, tuple[dict, str]]:
     c, h = worst()
     big = witness(c, header=h)
-    assert (big["signing_input_len"], big["payload_json_len"]) == (SIGNING_INPUT_MAX, PAYLOAD_JSON_MAX)
+    assert (big["signing_input_len"], len(encode(c))) == (SIGNING_INPUT_MAX, PAYLOAD_JSON_MAX)
     reordered = dict(reversed(claims(preferred_username="ab_c5", id="12345678901234567890").items()))
     return {
         "Prover": (witness(claims()), "the short token; username Brynn_QX folds to brynn_qx."),
@@ -136,24 +140,24 @@ def rejects() -> dict[str, dict]:
         "iss-google": witness(claims(iss="https://accounts.google.com")),
         "iss-unescaped": raw(b"https:\\/\\/oauth", b"https://oauth"),
         "iss-suffix": witness(claims(iss="https://oauth.telegram.org.evil")),
-        "id-forged-in-name": dict(witness(forged), id_offset=fp.index(b'\\"id') + 1, id_bytes=buf(b"999", ID_MAX),
-                                  id_len=3, id_node=halves(ID_TAG + b"999")),
-        "id-forged-in-given-name": dict(witness(forged_g), id_offset=fgp.index(b"&quot;id"),
-                                        id_bytes=buf(b"999", ID_MAX), id_len=3, id_node=halves(ID_TAG + b"999")),
-        "username-missing": dict(witness(nouser), username_offset=encode(nouser).index(b'"name"')),
+        "id-forged-in-name": witness(forged, id_offset=fp.index(b'\\"id') + 1, id_len=3,
+                                     id_node=halves(ID_TAG + b"999")),
+        "id-forged-in-given-name": witness(forged_g, id_offset=fgp.index(b"&quot;id"), id_len=3,
+                                           id_node=halves(ID_TAG + b"999")),
+        "username-missing": witness(nouser, username_offset=encode(nouser).index(b'"name"')),
         "username-4": with_user("abcd"),
         "username-33": with_user("A" * 33),
         "username-hyphen": with_user("alice-tg"),
-        "username-escape": dict(with_user("alicé_tg"), username_bytes=buf(b"alic\\u00e9_tg", USERNAME_MAX),
-                                username_len=13, handle_node=halves(HANDLE_TAG + b"alic\\u00e9_tg")),
-        "username-len-short": dict(base, username_len=7, username_bytes=buf(b"Brynn_T", USERNAME_MAX),
-                                   handle_node=halves(HANDLE_TAG + b"alice_t")),
+        "username-escape": dict(with_user("alicé_tg"), username_len=13,
+                                handle_node=halves(HANDLE_TAG + b"alic\\u00e9_tg")),
+        "username-len-short": dict(base, username_len=7, handle_node=halves(HANDLE_TAG + b"alice_t")),
         "handle-node-unfolded": dict(base, handle_node=halves(HANDLE_TAG + b"Brynn_QX")),
         "id-leading-zero": with_id("0123456789"),
         "id-non-digit": with_id("12a45"),
         "id-21-digits": with_id("123456789012345678901"),
-        "id-len-short": dict(base, id_len=9, id_bytes=buf(b"500000000", ID_MAX), id_node=halves(ID_TAG + b"500000000")),
+        "id-len-short": dict(base, id_len=9, id_node=halves(ID_TAG + b"500000000")),
         "id-node-other": dict(base, id_node=halves(ID_TAG + b"5000000002")),
+        "id-window-other": dict(base, id_window=other["id_window"], id_node=other["id_node"]),
         "nonce-other-digest": witness(claims(nonce=google.b64url(hashlib.sha256(DIGEST).digest()).decode())),
         "nonce-44-chars": witness(claims(nonce=NONCE + "A")),
         "nonce-digest-other": dict(base, authorization_digest=list(hashlib.sha256(DIGEST).digest())),
