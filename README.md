@@ -22,6 +22,7 @@ support, which fits libID's client-side proving use case almost perfectly.
 |---|---|---|
 | `circuits/bearer-link` | `bearer_link` | X's and GitHub's bearer link plus the account as keys. The identity response reveals only the anchors around the id and the handle; the circuit opens the two committed values as the platform sent them, checks that each is one whole JSON token (an id of digits, a handle of printable ASCII without `"` or `\`), folds the handle, and outputs `idNode = SHA256(idTag \|\| id)` and `handleNode = SHA256(handleTag \|\| fold(handle))` under the tags the verifier passes. 16 public inputs: the two bearer commitments, the id and handle commitments and the two nodes, each as two 16-byte halves, then each tag as one Field with its length. Neither value appears in plaintext; see the note below the table. The bearer is at most 128 bytes, the handle 39, the id 20 digits. |
 | `circuits/oidc-google` | `oidc_google` | Possession of a Google OIDC JWT: verifies the RSASSA-PKCS1-v1_5 signature over `header.payload` and exposes the Authorization Digest carried in `nonce`, `SHA256(aud)`, the id node `SHA256("libid.google.user-id" \|\| sub)`, the handle node `SHA256("libid.google.handle" \|\| fold(email))` (the `sub` and the address are not disclosed; each is checked to be one JSON string and the address is folded in the circuit), `exp`, and the modulus that verified. The Platform Verifier alone decides whether that modulus is trusted. |
+| `circuits/oidc-telegram` | `oidc_telegram` | Possession of a Telegram OIDC JWT: verifies the RSASSA-PKCS1-v1_5 signature over `header.payload` and exposes the Authorization Digest carried in `nonce`, `SHA256(aud)`, the id node `SHA256("libid.telegram.user-id" \|\| id)`, the handle node `SHA256("libid.telegram.handle" \|\| fold(preferred_username))`, `iat`, and the modulus that verified. Each claim is read from its own window of the signed payload, so claim order does not matter. The Platform Verifier alone decides whether that modulus is trusted. |
 
 A node is an unsalted tagged SHA-256, so anyone can hash a guess and compare.
 The id and handle are not disclosed, which is weaker than secret. In the
@@ -231,3 +232,4 @@ Verification keys under the pinned toolchain (nargo 1.0.0, bb 6.0.0):
 |---|---|
 | `bearer-link` | `0x0ae6b31e32fb572fb6c7de574ed92545dd6c4a81cc62a1d1be1a8c8e58e0e2a3` |
 | `oidc-google` | `0x24f940247d3108dacfc80e7e34b4a5efd0513a7c402a74565c20f099ec2aadba` |
+| `oidc-telegram` | `0x27337b81f5a3dd3ff41d6f49bf78de7448ddf99aa63853097e6254b301953287` |
