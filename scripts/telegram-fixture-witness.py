@@ -174,7 +174,8 @@ def run(path: pathlib.Path) -> str:
     r = subprocess.run(["nargo", "execute", "--silence-warnings", "-p", str(path)], cwd=CIRCUIT,
                        capture_output=True, text=True)
     out = r.stdout + r.stderr
-    return "ok" if r.returncode == 0 else "constraint" if "Failed to solve program" in out else out.strip()
+    failed = "Failed to solve program" in out or "Failed assertion" in out  # without, with a message
+    return "ok" if r.returncode == 0 else "constraint" if failed else out.strip()
 
 
 def check(files: list[pathlib.Path]) -> int:
