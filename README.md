@@ -72,22 +72,22 @@ The script refuses a fixture without that marker.
 `toolchain.env` is the single source of truth:
 
 ```
-NARGO_VERSION=1.0.0-rc.3
-BB_VERSION=6.0.0-rc.2
+NARGO_VERSION=1.0.0
+BB_VERSION=6.0.0
 ```
 
 Install exactly those:
 
 ```sh
 curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash
-noirup --version 1.0.0-rc.3
+noirup --version 1.0.0
 curl -L https://raw.githubusercontent.com/AztecProtocol/aztec-packages/master/barretenberg/bbup/install | bash
-bbup --version 6.0.0-rc.2
+bbup --version 6.0.0
 ```
 
-The two pins are one pair: a Barretenberg release builds against a single
-Noir commit (`noir/noir-repo` in aztec-packages at the bb tag) and reads only
-the ACIR that compiler writes. bb 6.0.0-rc.2 builds against Noir 1.0.0-rc.3.
+The two pins are one pair: bb reads only the ACIR its paired compiler
+writes. Noir 1.0.0 tests against bb 6.0.0 (`scripts/install_bb.sh` at the
+Noir tag).
 
 The pins matter because the whole chain is deterministic in the toolchain:
 
@@ -225,7 +225,7 @@ tags, buffers and vectors from them instead of keeping a copy. oidc-google's
 tags are compiled in; bearer-link takes its tags as public inputs, so the
 verifying contract must pass the tags `platforms.json` names.
 
-Verification keys under the pinned toolchain (nargo 1.0.0-rc.3, bb 6.0.0-rc.2):
+Verification keys under the pinned toolchain (nargo 1.0.0, bb 6.0.0):
 
 | Circuit | vk_hash |
 |---|---|
