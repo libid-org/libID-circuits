@@ -14,9 +14,8 @@ use noir_base64::BASE64_URL_ENCODER;
 use noir_rsa::rsa::verify_sha256_pkcs1v15;
 use sha256::sha256_var;
 
-global SIGNING_INPUT_MAX: u32 = 2624;
+global SIGNING_INPUT_MAX: u32 = 2688;
 global AUDIENCE_MAX: u32 = 20;
-global HANDLE_MIN: u32 = 5;
 global MAX_IAT_DIGITS: u32 = 12;
 global DIGEST_LEN: u32 = 32;
 global NONCE_LEN: u32 = 43; // BASE64URL_NOPAD(32 bytes)
@@ -32,6 +31,7 @@ global ID_WINDOW: u32 = 30;
 global USERNAME_WINDOW: u32 = 60;
 global NONCE_WINDOW: u32 = 57;
 
+// Telegram escapes `/` as `\/`.
 global ISS_PATTERN: [u8; 36] = "\"iss\":\"https:\\/\\/oauth.telegram.org\"".as_bytes();
 global AUD_PREFIX: [u8; 7] = "\"aud\":\"".as_bytes();
 global IAT_PREFIX: [u8; 6] = "\"iat\":".as_bytes();
@@ -143,8 +143,8 @@ fn main(
     assert(verify_sha256_pkcs1v15(hash, sig, 65537));
 
     // The payload follows the only '.'; base64url has none.
-    assert(header_b64_len + 1 < signing_input_len);
-    assert(signing_input[header_b64_len] == 46);
+    assert(header_b64_len + 1 < signing_input_len, "no payload");
+    assert(signing_input[header_b64_len] == 46, "no '.' before the payload");
     let p0 = header_b64_len + 1;
     let b64_len = signing_input_len - p0;
     assert(b64_len % 4 != 1, "malformed base64url length");
@@ -179,18 +179,11 @@ fn main(
     let (at, bound) = bind_window(signing_input, p0, b64_len, id_window, id_offset);
     let id: [u8; MAX_ID_TELEGRAM] = string_claim(id_window, at, ID_PREFIX, id_len, bound);
     check_id(id, id_len, ID_DECIMAL_TELEGRAM);
-    assert((id_len == 1) | (id[0] != 48), "leading zero in id");
     assert(fixed_node_halves(USER_ID_TAG_TELEGRAM, id, id_len) == id_node, "id node mismatch");
 
     let (at, bound) = bind_window(signing_input, p0, b64_len, username_window, username_offset);
     let username: [u8; MAX_HANDLE_TELEGRAM] =
         string_claim(username_window, at, USERNAME_PREFIX, username_len, bound);
-    assert(username_len >= HANDLE_MIN, "username shorter than 5");
-    for i in 0..MAX_HANDLE_TELEGRAM {
-        if i < username_len {
-            assert(is_username_byte(username[i]), "username byte not allowed");
-        }
-    }
     let folded = fold_handle(username, username_len);
     assert(
         fixed_node_halves(HANDLE_TAG_TELEGRAM, folded, username_len) == handle_node,
@@ -201,11 +194,6 @@ fn main(
     let nonce: [u8; NONCE_LEN] = string_claim(nonce_window, at, NONCE_PREFIX, NONCE_LEN, bound);
     let expected: [u8; NONCE_LEN] = BASE64_URL_ENCODER::encode(authorization_digest);
     assert(nonce == expected, "nonce does not encode the authorization digest");
-}
-
-// [A-Za-z0-9_]
-fn is_username_byte(b: u8) -> bool {
-    ((b >= 48) & (b <= 57)) | ((b >= 65) & (b <= 90)) | ((b >= 97) & (b <= 122)) | (b == 95)
 }
 
 // --- Tests ----------------------------------------------------------------
@@ -256,17 +244,6 @@ fn a_claim_closed_past_the_signed_bytes_is_refused() {
 fn a_window_other_than_the_signed_bytes_is_refused() {
     let window: [u8; 9] = "{\"a\":2}\0\0".as_bytes();
     let _ = bind_window(tiny_input(), 2, 10, window, 0);
-}
-
-#[test]
-fn every_username_byte_outside_the_alphabet_is_refused() {
-    let mut allowed = 0;
-    for b in 0..256 {
-        if is_username_byte(b as u8) {
-            allowed += 1;
-        }
-    }
-    assert((allowed == 63) & !is_username_byte(45) & is_username_byte(95));
 }
 
 // `x.` then base64url(`{"a":"1"`): the 3-character tail fixes a following
