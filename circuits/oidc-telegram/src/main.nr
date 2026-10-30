@@ -268,3 +268,17 @@ fn every_username_byte_outside_the_alphabet_is_refused() {
     }
     assert((allowed == 63) & !is_username_byte(45) & is_username_byte(95));
 }
+
+// `x.` then base64url(`{"a":"1"`): the 3-character tail fixes a following
+// ',' only in its top 2 bits, so a claim may not close there.
+#[test(should_fail_with = "claim outside the signed bytes")]
+fn a_claim_closed_at_the_signed_bound_is_refused() {
+    let tail: [u8; 13] = "x.eyJhIjoiMSI".as_bytes();
+    let mut si: [u8; SIGNING_INPUT_MAX] = [0; SIGNING_INPUT_MAX];
+    for i in 0..13 {
+        si[i] = tail[i];
+    }
+    let window: [u8; 9] = "{\"a\":\"1\",".as_bytes();
+    let (_, bound) = bind_window(si, 2, 11, window, 0);
+    close(window, 8, bound);
+}

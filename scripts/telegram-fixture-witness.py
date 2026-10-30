@@ -134,6 +134,9 @@ def rejects() -> dict[str, dict]:
     fp, fgp = encode(forged), encode(forged_g)
     c, h = worst()
     nouser = claims(preferred_username=None, name="Brynn_QX")
+    iss_key = raw(b'org",', b'org":')  # its close is the window's last byte, fixed only by the last character
+    iss_key["iss_window"][-1] = ord(",")
+    aud_q = b'7000000001","x":"y'
     return {
         "bad-signature": dict(base, signature=google.limbs(google.pkcs1_sha256(b"x", google.N, google.D))),
         "payload-not-signed": dict(other, **{k: base[k] for k in ("signing_input", "signature")}),
@@ -167,6 +170,26 @@ def rejects() -> dict[str, dict]:
         "aud-other": dict(base, audience_hash=halves(b"7000000002")),
         "payload-over-max": witness(worst(1)[0], header=h),
         "signing-input-over-max": witness(c, header=dict(h, kid=h["kid"] + "x")),
+        "payload-not-after-dot": dict(base, header_b64_len=base["header_b64_len"] + 4,
+                                      **{f"{k}_offset": base[f"{k}_offset"] - 3 for k in WINDOWS}),
+        "iss-close-unsigned": iss_key,
+        "iss-as-key": raw(b'org",', b'org":1,'),
+        "id-key-suffix": witness(claims(uid="999"), id_offset=encode(claims(uid="999")).index(b'"uid"') + 1,
+                                 id_len=3, id_node=halves(ID_TAG + b"999")),
+        "id-prefix-unquoted": raw(b'"id":"', b'"id": '),
+        "id-closed-by-quote": raw(b'7051836294",', b'7051836294"",'),
+        "id-leading-zero-2": with_id("05"),
+        "aud-prefix": witness(claims(aud=AUD + "x,y")),
+        "aud-empty": witness(claims(aud=""), audience_len=0, audience_hash=halves(b"")),
+        "aud-quote": dict(raw(b'"aud":"7000000001"', b'"aud":"' + aud_q + b'"'), audience_len=len(aud_q),
+                          audience_hash=halves(aud_q)),
+        "aud-backslash": witness(claims(aud="70\\01"), audience_len=6, audience_hash=halves(b"70\\\\01")),
+        "iat-empty": dict(raw(f'"iat":{IAT}'.encode(), b'"iat":'), iat_len=0, iat=0),
+        "iat-13-digits": dict(raw(f'"iat":{IAT}'.encode(), f'"iat":{IAT}123'.encode()), iat_len=13,
+                              iat=IAT * 100 + 12),
+        "iat-colon-digit": dict(raw(f'"iat":{IAT}'.encode(), f'"iat":{IAT // 10}:'.encode()), iat=IAT + 10),
+        "iat-len-short": dict(base, iat_len=9, iat=IAT // 10),
+        "username-hyphen-last": with_user("alice_t-"),
     }
 
 
