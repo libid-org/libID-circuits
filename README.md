@@ -123,7 +123,8 @@ refuse to run under any other version.
   (`bb write_solidity_verifier -t evm --optimized` on the vk, see
   "Regenerating a Solidity verifier"), the contract named after the circuit
   directory: `bearer-link/BearerLinkHonkVerifier.sol`,
-  `oidc-google/OidcGoogleHonkVerifier.sol`;
+  `oidc-google/OidcGoogleHonkVerifier.sol`,
+  `oidc-telegram/OidcTelegramHonkVerifier.sol`;
 - `platforms.json` and `handles.json` — the platform table and the vectors
   the circuit was built from, copied from `lib/identity/`.
 
@@ -223,8 +224,8 @@ manifest names.
 `platforms.json` and `handles.json` in the same tarball, checked against
 `files` the same way, are the table the circuit was built from: generate your
 tags, buffers and vectors from them instead of keeping a copy. oidc-google's
-tags are compiled in; bearer-link takes its tags as public inputs, so the
-verifying contract must pass the tags `platforms.json` names.
+and oidc-telegram's tags are compiled in; bearer-link takes its tags as public
+inputs, so the verifying contract must pass the tags `platforms.json` names.
 
 Verification keys under the pinned toolchain (nargo 1.0.0, bb 6.0.0):
 
@@ -232,4 +233,4 @@ Verification keys under the pinned toolchain (nargo 1.0.0, bb 6.0.0):
 |---|---|
 | `bearer-link` | `0x0ae6b31e32fb572fb6c7de574ed92545dd6c4a81cc62a1d1be1a8c8e58e0e2a3` |
 | `oidc-google` | `0x24f940247d3108dacfc80e7e34b4a5efd0513a7c402a74565c20f099ec2aadba` |
-| `oidc-telegram` | `0x27337b81f5a3dd3ff41d6f49bf78de7448ddf99aa63853097e6254b301953287` |
+| `oidc-telegram` | `0x22433634ba45663381e63af155459b30823a084fa0a05443cd7bb829e5065607` |
