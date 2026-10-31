@@ -42,7 +42,8 @@ global NONCE_PREFIX: [u8; 9] = "\"nonce\":\"".as_bytes();
 // Binds `window` to the signed base64url of the payload groups from the one
 // holding byte `offset`. Returns `offset`'s index in the window and how many
 // leading window bytes the signed characters fix.
-fn bind_window<let W: u32>(
+fn bind_window<let W: u32, let N: u32>(
+    claim: str<N>,
     signing_input: [u8; SIGNING_INPUT_MAX],
     payload_start: u32,
     payload_b64_len: u32,
@@ -51,7 +52,7 @@ fn bind_window<let W: u32>(
 ) -> (u32, u32) {
     let group = offset / 3;
     let start = 4 * group;
-    assert(start + 4 <= payload_b64_len, "window starts outside the payload");
+    assert(start + 4 <= payload_b64_len, f"{claim} window starts outside the payload");
     let encoded = BASE64_URL_ENCODER::encode(window);
     let rest = payload_b64_len - start;
     let signed = if rest < encoded.len() {
@@ -63,44 +64,50 @@ fn bind_window<let W: u32>(
         if i < signed {
             assert(
                 signing_input[payload_start + start + i] == encoded[i],
-                "window does not match the signed input",
+                f"{claim} window does not match the signed input",
             );
         }
     }
     (offset - 3 * group, signed * 3 / 4)
 }
 
-fn match_at<let W: u32, let P: u32>(w: [u8; W], at: u32, pattern: [u8; P]) -> u32 {
+fn match_at<let W: u32, let P: u32, let N: u32>(
+    claim: str<N>,
+    w: [u8; W],
+    at: u32,
+    pattern: [u8; P],
+) -> u32 {
     for i in 0..P {
-        assert(w[at + i] == pattern[i], "claim pattern mismatch");
+        assert(w[at + i] == pattern[i], f"{claim} claim pattern mismatch");
     }
     at + P
 }
 
 // The claim ends at `end` with ',' or '}', inside the signed bytes.
-fn close<let W: u32>(w: [u8; W], end: u32, bound: u32) {
-    assert((w[end] == 44) | (w[end] == 125), "claim not followed by ',' or '}'");
-    assert(end < bound, "claim outside the signed bytes");
+fn close<let W: u32, let N: u32>(claim: str<N>, w: [u8; W], end: u32, bound: u32) {
+    assert((w[end] == 44) | (w[end] == 125), f"{claim} claim not followed by ',' or '}}'");
+    assert(end < bound, f"{claim} claim outside the signed bytes");
 }
 
 // The `len`-byte value of `<prefix><value>"` at `at`, then closed.
-fn string_claim<let W: u32, let P: u32, let M: u32>(
+fn string_claim<let W: u32, let P: u32, let M: u32, let N: u32>(
+    claim: str<N>,
     w: [u8; W],
     at: u32,
     prefix: [u8; P],
     len: u32,
     bound: u32,
 ) -> [u8; M] {
-    let start = match_at(w, at, prefix);
-    assert(len <= M, "claim longer than its buffer");
+    let start = match_at(claim, w, at, prefix);
+    assert(len <= M, f"{claim} value longer than its buffer");
     let mut value: [u8; M] = [0; M];
     for i in 0..M {
         if i < len {
             value[i] = w[start + i];
         }
     }
-    assert(w[start + len] == 34, "claim value not closed");
-    close(w, start + len + 1, bound);
+    assert(w[start + len] == 34, f"{claim} value not closed");
+    close(claim, w, start + len + 1, bound);
     value
 }
 
@@ -149,20 +156,25 @@ fn main(
     let b64_len = signing_input_len - p0;
     assert(b64_len % 4 != 1, "malformed base64url length");
 
-    let (at, bound) = bind_window(signing_input, p0, b64_len, iss_window, iss_offset);
-    close(iss_window, match_at(iss_window, at, ISS_PATTERN), bound);
+    let (at, bound) = bind_window("iss", signing_input, p0, b64_len, iss_window, iss_offset);
+    close(
+        "iss",
+        iss_window,
+        match_at("iss", iss_window, at, ISS_PATTERN),
+        bound,
+    );
 
-    let (at, bound) = bind_window(signing_input, p0, b64_len, aud_window, aud_offset);
+    let (at, bound) = bind_window("aud", signing_input, p0, b64_len, aud_window, aud_offset);
     assert(audience_len != 0, "aud is empty");
     let audience: [u8; AUDIENCE_MAX] =
-        string_claim(aud_window, at, AUD_PREFIX, audience_len, bound);
+        string_claim("aud", aud_window, at, AUD_PREFIX, audience_len, bound);
     for i in 0..AUDIENCE_MAX {
         assert((audience[i] != 34) & (audience[i] != 92), "aud byte not allowed");
     }
     assert(halves(sha256_var(audience, audience_len)) == audience_hash, "audience mismatch");
 
-    let (at, bound) = bind_window(signing_input, p0, b64_len, iat_window, iat_offset);
-    let start = match_at(iat_window, at, IAT_PREFIX);
+    let (at, bound) = bind_window("iat", signing_input, p0, b64_len, iat_window, iat_offset);
+    let start = match_at("iat", iat_window, at, IAT_PREFIX);
     assert((iat_len != 0) & (iat_len <= MAX_IAT_DIGITS), "iat length");
     assert((iat_len == 1) | (iat_window[start] != 48), "leading zero in iat");
     let mut parsed: u64 = 0;
@@ -173,25 +185,46 @@ fn main(
             parsed = parsed * 10 + (digit - 48) as u64;
         }
     }
-    close(iat_window, start + iat_len, bound);
+    close("iat", iat_window, start + iat_len, bound);
     assert(parsed == iat, "iat mismatch");
 
-    let (at, bound) = bind_window(signing_input, p0, b64_len, id_window, id_offset);
-    let id: [u8; MAX_ID_TELEGRAM] = string_claim(id_window, at, ID_PREFIX, id_len, bound);
+    let (at, bound) = bind_window("id", signing_input, p0, b64_len, id_window, id_offset);
+    let id: [u8; MAX_ID_TELEGRAM] = string_claim("id", id_window, at, ID_PREFIX, id_len, bound);
     check_id(id, id_len, ID_DECIMAL_TELEGRAM);
     assert(fixed_node_halves(USER_ID_TAG_TELEGRAM, id, id_len) == id_node, "id node mismatch");
 
-    let (at, bound) = bind_window(signing_input, p0, b64_len, username_window, username_offset);
-    let username: [u8; MAX_HANDLE_TELEGRAM] =
-        string_claim(username_window, at, USERNAME_PREFIX, username_len, bound);
+    let (at, bound) = bind_window(
+        "username",
+        signing_input,
+        p0,
+        b64_len,
+        username_window,
+        username_offset,
+    );
+    let username: [u8; MAX_HANDLE_TELEGRAM] = string_claim(
+        "username",
+        username_window,
+        at,
+        USERNAME_PREFIX,
+        username_len,
+        bound,
+    );
     let folded = fold_handle(username, username_len);
     assert(
         fixed_node_halves(HANDLE_TAG_TELEGRAM, folded, username_len) == handle_node,
         "handle node mismatch",
     );
 
-    let (at, bound) = bind_window(signing_input, p0, b64_len, nonce_window, nonce_offset);
-    let nonce: [u8; NONCE_LEN] = string_claim(nonce_window, at, NONCE_PREFIX, NONCE_LEN, bound);
+    let (at, bound) = bind_window(
+        "nonce",
+        signing_input,
+        p0,
+        b64_len,
+        nonce_window,
+        nonce_offset,
+    );
+    let nonce: [u8; NONCE_LEN] =
+        string_claim("nonce", nonce_window, at, NONCE_PREFIX, NONCE_LEN, bound);
     let expected: [u8; NONCE_LEN] = BASE64_URL_ENCODER::encode(authorization_digest);
     assert(nonce == expected, "nonce does not encode the authorization digest");
 }
@@ -228,27 +261,27 @@ fn tiny_input() -> [u8; SIGNING_INPUT_MAX] {
 #[test]
 fn a_window_past_the_payload_fixes_only_the_signed_bytes() {
     let window: [u8; 9] = "{\"a\":1}\0\0".as_bytes();
-    let (at, bound) = bind_window(tiny_input(), 2, 10, window, 1);
+    let (at, bound) = bind_window("a", tiny_input(), 2, 10, window, 1);
     assert((at == 1) & (bound == 7));
-    close(window, 6, bound);
+    close("a", window, 6, bound);
 }
 
-#[test(should_fail_with = "claim outside the signed bytes")]
+#[test(should_fail_with = "a claim outside the signed bytes")]
 fn a_claim_closed_past_the_signed_bytes_is_refused() {
     let window: [u8; 9] = "{\"a\":1}\0}".as_bytes();
-    let (_, bound) = bind_window(tiny_input(), 2, 10, window, 0);
-    close(window, 8, bound);
+    let (_, bound) = bind_window("a", tiny_input(), 2, 10, window, 0);
+    close("a", window, 8, bound);
 }
 
-#[test(should_fail_with = "window does not match the signed input")]
+#[test(should_fail_with = "a window does not match the signed input")]
 fn a_window_other_than_the_signed_bytes_is_refused() {
     let window: [u8; 9] = "{\"a\":2}\0\0".as_bytes();
-    let _ = bind_window(tiny_input(), 2, 10, window, 0);
+    let _ = bind_window("a", tiny_input(), 2, 10, window, 0);
 }
 
 // `x.` then base64url(`{"a":"1"`): the 3-character tail fixes a following
 // ',' only in its top 2 bits, so a claim may not close there.
-#[test(should_fail_with = "claim outside the signed bytes")]
+#[test(should_fail_with = "a claim outside the signed bytes")]
 fn a_claim_closed_at_the_signed_bound_is_refused() {
     let tail: [u8; 13] = "x.eyJhIjoiMSI".as_bytes();
     let mut si: [u8; SIGNING_INPUT_MAX] = [0; SIGNING_INPUT_MAX];
@@ -256,6 +289,6 @@ fn a_claim_closed_at_the_signed_bound_is_refused() {
         si[i] = tail[i];
     }
     let window: [u8; 9] = "{\"a\":\"1\",".as_bytes();
-    let (_, bound) = bind_window(si, 2, 11, window, 0);
-    close(window, 8, bound);
+    let (_, bound) = bind_window("a", si, 2, 11, window, 0);
+    close("a", window, 8, bound);
 }

@@ -128,8 +128,9 @@ def accepts() -> dict[str, tuple[dict, str]]:
     }
 
 
-PAT, VALUE, CLOSE = "claim pattern mismatch", "claim value not closed", "claim not followed by ',' or '}'"
-WINDOW, LONG = "window does not match the signed input", "claim longer than its buffer"
+# A claim window's assertions, named after its claim.
+PAT, VALUE, CLOSE = "{} claim pattern mismatch", "{} value not closed", "{} claim not followed by ',' or '}}'"
+WINDOW, LONG = "{} window does not match the signed input", "{} value longer than its buffer"
 # noir_rsa's check carries no message.
 RSA = "Failed to solve program: 'Cannot satisfy constraint'"
 
@@ -152,33 +153,33 @@ def rejects() -> dict[str, tuple[dict, str]]:
     user_q = b'Ali"ce_'
     return {
         "bad-signature": (dict(base, signature=limbs(google.pkcs1_sha256(b"x", google.N, google.D))), RSA),
-        "payload-not-signed": (dict(other, **{k: base[k] for k in ("signing_input", "signature")}), WINDOW),
-        "iss-google": (witness(claims(iss="https://accounts.google.com")), PAT),
-        "iss-unescaped": (raw(b"https:\\/\\/oauth", b"https://oauth"), PAT),
-        "iss-suffix": (witness(claims(iss="https://oauth.telegram.org.evil")), PAT),
+        "payload-not-signed": (dict(other, **{k: base[k] for k in ("signing_input", "signature")}), WINDOW.format("id")),
+        "iss-google": (witness(claims(iss="https://accounts.google.com")), PAT.format("iss")),
+        "iss-unescaped": (raw(b"https:\\/\\/oauth", b"https://oauth"), PAT.format("iss")),
+        "iss-suffix": (witness(claims(iss="https://oauth.telegram.org.evil")), PAT.format("iss")),
         "id-forged-in-name": (witness(forged, id_offset=fp.index(b'\\"id') + 1, id_len=3,
-                                      id_node=sha256_halves(ID_TAG + b"999")), PAT),
+                                      id_node=sha256_halves(ID_TAG + b"999")), PAT.format("id")),
         # Where `"id":"` starts once each &quot; reads as '"'.
         "id-forged-in-given-name": (witness(forged_g, id_offset=fgp.index(b"&quot;id"), id_len=3,
-                                            id_node=sha256_halves(ID_TAG + b"999")), PAT),
-        "username-missing": (witness(nouser, username_offset=encode(nouser).index(b'"name"')), PAT),
+                                            id_node=sha256_halves(ID_TAG + b"999")), PAT.format("id")),
+        "username-missing": (witness(nouser, username_offset=encode(nouser).index(b'"name"')), PAT.format("username")),
         "username-empty": (with_user(""), "handle is empty"),
-        "username-33": (with_user("A" * 33), LONG),
+        "username-33": (with_user("A" * 33), LONG.format("username")),
         "username-escape": (dict(with_user("alicé_tg"), username_len=13,
                                  handle_node=sha256_halves(HANDLE_TAG + b"alic\\u00e9_tg")), "handle byte not allowed"),
         "username-quote": (dict(raw(b'"Brynn_QX"', b'"' + user_q + b'"'), username_len=len(user_q),
                                 handle_node=sha256_halves(HANDLE_TAG + it.fold(user_q))), "handle byte not allowed"),
-        "username-len-short": (dict(base, username_len=7, handle_node=sha256_halves(HANDLE_TAG + b"alice_t")), VALUE),
+        "username-len-short": (dict(base, username_len=7, handle_node=sha256_halves(HANDLE_TAG + b"alice_t")), VALUE.format("username")),
         "handle-node-unfolded": (dict(base, handle_node=sha256_halves(HANDLE_TAG + b"Brynn_QX")),
                                  "handle node mismatch"),
         "id-non-digit": (with_id("12a45"), "id byte not allowed"),
-        "id-21-digits": (with_id("123456789012345678901"), LONG),
-        "id-len-short": (dict(base, id_len=9, id_node=sha256_halves(ID_TAG + b"500000000")), VALUE),
+        "id-21-digits": (with_id("123456789012345678901"), LONG.format("id")),
+        "id-len-short": (dict(base, id_len=9, id_node=sha256_halves(ID_TAG + b"500000000")), VALUE.format("id")),
         "id-node-other": (dict(base, id_node=sha256_halves(ID_TAG + b"5000000002")), "id node mismatch"),
-        "id-window-other": (dict(base, id_window=other["id_window"], id_node=other["id_node"]), WINDOW),
+        "id-window-other": (dict(base, id_window=other["id_window"], id_node=other["id_node"]), WINDOW.format("id")),
         "nonce-other-digest": (witness(claims(nonce=google.b64url(hashlib.sha256(DIGEST).digest()).decode())),
                                "nonce does not encode the authorization digest"),
-        "nonce-44-chars": (witness(claims(nonce=NONCE + "A")), VALUE),
+        "nonce-44-chars": (witness(claims(nonce=NONCE + "A")), VALUE.format("nonce")),
         "nonce-digest-other": (dict(base, authorization_digest=list(hashlib.sha256(DIGEST).digest())),
                                "nonce does not encode the authorization digest"),
         "iat-leading-zero": (dict(raw(f'"iat":{IAT}'.encode(), f'"iat":0{IAT}'.encode()), iat_len=len(str(IAT)) + 1),
@@ -191,13 +192,13 @@ def rejects() -> dict[str, tuple[dict, str]]:
         "payload-not-after-dot": (dict(base, header_b64_len=base["header_b64_len"] + 4,
                                        **{f"{k}_offset": base[f"{k}_offset"] - 3 for k in WINDOWS}),
                                   "no '.' before the payload"),
-        "iss-close-unsigned": (iss_key, WINDOW),
-        "iss-as-key": (raw(b'org",', b'org":1,'), CLOSE),
+        "iss-close-unsigned": (iss_key, WINDOW.format("iss")),
+        "iss-as-key": (raw(b'org",', b'org":1,'), CLOSE.format("iss")),
         "id-key-suffix": (witness(claims(uid="999"), id_offset=encode(claims(uid="999")).index(b'"uid"') + 1,
-                                  id_len=3, id_node=sha256_halves(ID_TAG + b"999")), PAT),
-        "id-prefix-unquoted": (raw(b'"id":"', b'"id": '), PAT),
-        "id-closed-by-quote": (raw(b'7051836294",', b'7051836294"",'), CLOSE),
-        "aud-prefix": (witness(claims(aud=AUD + "x,y")), VALUE),
+                                  id_len=3, id_node=sha256_halves(ID_TAG + b"999")), PAT.format("id")),
+        "id-prefix-unquoted": (raw(b'"id":"', b'"id": '), PAT.format("id")),
+        "id-closed-by-quote": (raw(b'7051836294",', b'7051836294"",'), CLOSE.format("id")),
+        "aud-prefix": (witness(claims(aud=AUD + "x,y")), VALUE.format("aud")),
         "aud-empty": (witness(claims(aud=""), audience_len=0, audience_hash=sha256_halves(b"")), "aud is empty"),
         "aud-quote": (dict(raw(b'"aud":"7000000001"', b'"aud":"' + aud_q + b'"'), audience_len=len(aud_q),
                            audience_hash=sha256_halves(aud_q)), "aud byte not allowed"),
@@ -208,7 +209,7 @@ def rejects() -> dict[str, tuple[dict, str]]:
                                iat=IAT * 100 + 12), "iat length"),
         "iat-colon-digit": (dict(raw(f'"iat":{IAT}'.encode(), f'"iat":{IAT // 10}:'.encode()), iat=IAT + 10),
                             "iat byte not a digit"),
-        "iat-len-short": (dict(base, iat_len=9, iat=IAT // 10), CLOSE),
+        "iat-len-short": (dict(base, iat_len=9, iat=IAT // 10), CLOSE.format("iat")),
     }
 
 
