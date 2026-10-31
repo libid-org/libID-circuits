@@ -12,9 +12,11 @@ Usage: python3 -I scripts/telegram-fixture-witness.py [--check]
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import hashlib
 import json
 import pathlib
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -26,6 +28,7 @@ from identity_table import DIGEST, D, N, b64url, pkcs1_sha256  # noqa: E402
 
 CIRCUIT = it.ROOT / "circuits" / "oidc-telegram"
 MAIN = CIRCUIT / "src" / "main.nr"
+ARTIFACT = CIRCUIT / "target" / "oidc_telegram.json"
 SIGNING_INPUT_MAX, NUM_LIMBS, MOD_BITS = (it.integer(k, MAIN) for k in ("SIGNING_INPUT_MAX", "NUM_LIMBS", "MOD_BITS"))
 # Each claim's window: whole payload groups from the one holding its offset.
 WINDOWS = {k: it.integer(f"{k.upper()}_WINDOW", MAIN) for k in ("iss", "aud", "iat", "id", "username", "nonce")}
@@ -211,20 +214,25 @@ def rejects() -> dict[str, tuple[dict, str]]:
 
 
 def run(path: pathlib.Path) -> tuple[bool, str]:
-    r = subprocess.run(["nargo", "execute", "--silence-warnings", "-p", str(path)], cwd=CIRCUIT,
-                       capture_output=True, text=True)
+    r = subprocess.run(["noir-execute", "execute", "-a", str(ARTIFACT), "-p", str(path)], capture_output=True, text=True)
     return r.returncode == 0, (r.stdout + r.stderr).strip()
 
 
 def check(tmp: pathlib.Path, files: list[pathlib.Path]) -> int:
-    bad = [f"accept {p.name}: {out[-300:]}" for p in files for ok, out in [run(p)] if not ok]
-    abi = json.loads((CIRCUIT / "target" / "oidc_telegram.json").read_text())["abi"]["parameters"]
+    if shutil.which("noir-execute") is None:
+        raise SystemExit("noir-execute not on PATH; noirup installs it beside nargo")
+    subprocess.run(["nargo", "compile", "--silence-warnings"], cwd=CIRCUIT, check=True)
+    abi = json.loads(ARTIFACT.read_text())["abi"]["parameters"]
     got = [(p["name"], p["type"].get("length", 1)) for p in abi if p["visibility"] == "public"]
-    bad += [] if got == PUBLIC else [f"public inputs {got}, want {PUBLIC}"]
-    for name, (w, want) in rejects().items():
-        path = tmp / f"reject-{name}.toml"
-        path.write_text(toml(w, name))
-        ok, out = run(path)
+    bad = [] if got == PUBLIC else [f"public inputs {got}, want {PUBLIC}"]
+    cases = rejects()
+    for name, (w, _) in cases.items():
+        (tmp / f"reject-{name}.toml").write_text(toml(w, name))
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        accepted = list(pool.map(run, files))
+        rejected = list(pool.map(run, (tmp / f"reject-{name}.toml" for name in cases)))
+    bad += [f"accept {p.name}: {out[-300:]}" for p, (ok, out) in zip(files, accepted) if not ok]
+    for (name, (_, want)), (ok, out) in zip(cases.items(), rejected):
         if ok or (want if want == RSA else f"Assertion failed: {want}") not in out:
             bad.append(f"reject {name}: want {want!r}, got {'ok' if ok else out[-300:]}")
     print("\n".join(bad) or "every accept solves; every reject fails its expected assertion")
@@ -234,7 +242,7 @@ def check(tmp: pathlib.Path, files: list[pathlib.Path]) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--out", type=pathlib.Path, default=CIRCUIT, help="directory for Prover*.toml")
-    parser.add_argument("--check", action="store_true", help="execute accepts and rejects with nargo; write nothing")
+    parser.add_argument("--check", action="store_true", help="execute accepts and rejects with noir-execute; write nothing")
     args = parser.parse_args()
     with tempfile.TemporaryDirectory() as tmp:
         out = pathlib.Path(tmp) if args.check else args.out.resolve()
