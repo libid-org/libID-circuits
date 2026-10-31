@@ -134,7 +134,10 @@ jobs:
           diff -u circuits/oidc-google/Prover.toml "$RUNNER_TEMP/oidc-google.Prover.toml"
           mkdir "$RUNNER_TEMP/oidc-telegram"
           python3 -I scripts/telegram-fixture-witness.py --out "$RUNNER_TEMP/oidc-telegram"
-          diff -ur --exclude=src --exclude=Nargo.toml --exclude=target circuits/oidc-telegram "$RUNNER_TEMP/oidc-telegram"
+          diff <(cd circuits/oidc-telegram && ls Prover*.toml) <(cd "$RUNNER_TEMP/oidc-telegram" && ls)
+          for toml in "$RUNNER_TEMP"/oidc-telegram/*; do
+            diff -u "circuits/oidc-telegram/${toml##*/}" "$toml"
+          done
           for platform in x github; do
             toml="Prover.toml"
             [[ "$platform" == x ]] || toml="Prover-$platform.toml"
