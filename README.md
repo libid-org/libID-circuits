@@ -64,7 +64,7 @@ handles (`Alice_1`, `OctoCat`) exercise the fold, each beside a `provenance`
 object with `"synthetic": true`. CI regenerates both and fails on a
 difference. After copying a fixture, `scripts/check-fixtures.py
 <libID-contracts checkout>` checks both files and
-`scripts/google-fixture-witness.py`'s `DIGEST` against those sessions.
+`scripts/identity_table.py`'s `DIGEST` against those sessions.
 
 The script refuses a fixture without that marker.
 
@@ -198,7 +198,7 @@ scripts/build.sh && scripts/check-verifiers.sh
 
 `circuits/oidc-google/Prover.toml` is written by
 `scripts/google-fixture-witness.py`: a Google-shaped ID token signed by a
-synthetic RSA-2048 key, its constants in the script, for the fixture `sub` 100000000000000000001 and
+synthetic RSA-2048 key, its constants in `scripts/identity_table.py`, for the fixture `sub` 100000000000000000001 and
 `email` Fixture@Example.com, mixed case so the fold is exercised.
 
 ## Releases
