@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Write circuits/oidc-telegram/Prover*.toml: Telegram-shaped ID tokens signed
-by the synthetic RSA-2048 key of scripts/google-fixture-witness.py. Public
+by the synthetic RSA-2048 key of scripts/identity_table.py. Public
 inputs are computed with hashlib, independently of the circuit.
 
 With --check, execute those witnesses and the reject cases below against the
@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import importlib.util
 import json
 import pathlib
 import subprocess
@@ -23,10 +22,7 @@ import tempfile
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))  # -I drops it
 import identity_table as it  # noqa: E402
-
-_spec = importlib.util.spec_from_file_location("google_witness", it.ROOT / "scripts" / "google-fixture-witness.py")
-google = sys.modules["google_witness"] = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(google)
+from identity_table import DIGEST, D, N, b64url, pkcs1_sha256  # noqa: E402
 
 CIRCUIT = it.ROOT / "circuits" / "oidc-telegram"
 MAIN = CIRCUIT / "src" / "main.nr"
@@ -37,9 +33,9 @@ ID_TAG, HANDLE_TAG = it.byte_array("USER_ID_TAG_TELEGRAM"), it.byte_array("HANDL
 PUBLIC = [("authorization_digest", 32), ("audience_hash", 2), ("id_node", 2), ("handle_node", 2), ("iat", 1),
           ("modulus", NUM_LIMBS)]
 
-DIGEST, IAT, AUD = google.DIGEST, 1893452400, "7000000001"
-HEAD = google.b64url(json.dumps({"alg": "RS256", "kid": "oidc-1", "typ": "JWT"}, separators=(",", ":")).encode())
-NONCE = google.b64url(DIGEST).decode()
+IAT, AUD = 1893452400, "7000000001"
+HEAD = b64url(json.dumps({"alg": "RS256", "kid": "oidc-1", "typ": "JWT"}, separators=(",", ":")).encode())
+NONCE = b64url(DIGEST).decode()
 
 
 def claims(**over) -> dict:
@@ -63,19 +59,19 @@ def buf(value: bytes | list, size: int) -> list[int]:
 
 
 def sha256_halves(data: bytes) -> list[str]:
-    return google.hex_halves(hashlib.sha256(data).digest())
+    return it.hex_halves(hashlib.sha256(data).digest())
 
 
 def limbs(value: int) -> list[str]:
-    return [hex((value >> (google.LIMB_BITS * i)) & ((1 << google.LIMB_BITS) - 1)) for i in range(NUM_LIMBS)]
+    return it.limbs(value, NUM_LIMBS)
 
 
 def witness(c: dict, payload: bytes | None = None, **over) -> dict:
     """The circuit inputs for token `c` (or raw `payload`), then `over` replaced;
     each `<claim>_offset` in `over` moves that claim's window."""
     payload = encode(c) if payload is None else payload
-    si = HEAD + b"." + google.b64url(payload)
-    sig = google.pkcs1_sha256(si, google.N, google.D)
+    si = HEAD + b"." + b64url(payload)
+    sig = pkcs1_sha256(si, N, D)
     at = lambda k: max(payload.find(f'"{k}":'.encode()), 1)  # noqa: E731  (a missing claim: 1)
     user, uid = str(c.get("preferred_username", "Brynn_QX")).encode(), str(c["id"]).encode()
     w = dict(
@@ -83,10 +79,10 @@ def witness(c: dict, payload: bytes | None = None, **over) -> dict:
         iss_offset=at("iss"), aud_offset=at("aud"), audience_len=len(AUD), iat_offset=at("iat"),
         iat_len=len(str(IAT)), id_offset=at("id"), id_len=len(uid), username_offset=at("preferred_username"),
         username_len=len(user), nonce_offset=at("nonce"),
-        signature=limbs(sig), redc=limbs((1 << (2 * MOD_BITS + 6)) // google.N),
+        signature=limbs(sig), redc=limbs(it.redc(N, MOD_BITS)),
         authorization_digest=list(DIGEST), audience_hash=sha256_halves(AUD.encode()),
         id_node=sha256_halves(ID_TAG + uid), handle_node=sha256_halves(HANDLE_TAG + it.fold(user)), iat=IAT,
-        modulus=limbs(google.N),
+        modulus=limbs(N),
     )
     w.update(over)
     for k, size in WINDOWS.items():
@@ -153,7 +149,7 @@ def rejects() -> dict[str, tuple[dict, str]]:
     aud_q = b'7000000001","x":"y'
     user_q = b'Ali"ce_'
     return {
-        "bad-signature": (dict(base, signature=limbs(google.pkcs1_sha256(b"x", google.N, google.D))), RSA),
+        "bad-signature": (dict(base, signature=limbs(pkcs1_sha256(b"x", N, D))), RSA),
         "payload-not-signed": (dict(other, **{k: base[k] for k in ("signing_input", "signature")}), WINDOW.format("id")),
         "iss-google": (witness(claims(iss="https://accounts.google.com")), PAT.format("iss")),
         "iss-unescaped": (raw(b"https:\\/\\/oauth", b"https://oauth"), PAT.format("iss")),
@@ -178,7 +174,7 @@ def rejects() -> dict[str, tuple[dict, str]]:
         "id-len-short": (dict(base, id_len=9, id_node=sha256_halves(ID_TAG + b"500000000")), VALUE.format("id")),
         "id-node-other": (dict(base, id_node=sha256_halves(ID_TAG + b"5000000002")), "id node mismatch"),
         "id-window-other": (dict(base, id_window=other["id_window"], id_node=other["id_node"]), WINDOW.format("id")),
-        "nonce-other-digest": (witness(claims(nonce=google.b64url(hashlib.sha256(DIGEST).digest()).decode())),
+        "nonce-other-digest": (witness(claims(nonce=b64url(hashlib.sha256(DIGEST).digest()).decode())),
                                "nonce does not encode the authorization digest"),
         "nonce-44-chars": (witness(claims(nonce=NONCE + "A")), VALUE.format("nonce")),
         "nonce-digest-other": (dict(base, authorization_digest=list(hashlib.sha256(DIGEST).digest())),

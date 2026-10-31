@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check the vendored fixtures against libID-contracts' ceremony session
 fixtures: fixtures/{x,github}-identity-link-witness.json hold the sessions'
-`identity_link_witness`, and scripts/google-fixture-witness.py's DIGEST is
+`identity_link_witness`, and scripts/identity_table.py's DIGEST is
 their `authorization_digest`. CI runs it at the commit contracts.ref pins.
 
 Usage: scripts/check-fixtures.py <libID-contracts checkout>
@@ -29,7 +29,6 @@ def sibling(name: str):
 
 
 identity_link = sibling("identity-link-witness")
-google = sibling("google-fixture-witness")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -59,16 +58,16 @@ def main() -> int:
         if vendored.identity_link_witness != session.identity_link_witness:
             print(f"error: {vendored_path} differs from {session_path}'s identity_link_witness; copy it again", file=sys.stderr)
             failed = True
-        if session.authorization_digest != "0x" + google.DIGEST.hex():
+        if session.authorization_digest != "0x" + identity_table.DIGEST.hex():
             print(
-                f"error: scripts/google-fixture-witness.py's DIGEST differs from {session_path}'s "
+                f"error: scripts/identity_table.py's DIGEST differs from {session_path}'s "
                 f"authorization_digest {session.authorization_digest}",
                 file=sys.stderr,
             )
             failed = True
     if failed:
         return 1
-    print(f"the vendored fixtures and the Google digest match {sessions}")
+    print(f"the vendored fixtures and the OIDC fixtures' digest match {sessions}")
     return 0
 
 
