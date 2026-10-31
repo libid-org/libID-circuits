@@ -102,10 +102,11 @@ def toml(w: dict, comment: str) -> str:
 
 
 def worst() -> dict:
-    """The largest real token: 64+64 \\uXXXX-escaped names, a 32-byte
-    username, a 20-digit id."""
+    """The largest real token: a 20-digit sub, 64+64 \\uXXXX-escaped names,
+    a 74-char userpic URL, a 32-byte username, a 20-digit id."""
     g, f = "Ж" * 64, "й" * 64
-    return claims(name=f"{g} {f}", given_name=g, family_name=f, preferred_username="A" * 31 + "z",
+    return claims(sub="9" * 20, name=f"{g} {f}", given_name=g, family_name=f,
+                  picture="https://t.me/i/userpic/320/" + "P" * 43 + ".jpg", preferred_username="A" * 31 + "z",
                   id="9" * 20)
 
 
