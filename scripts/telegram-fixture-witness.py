@@ -5,7 +5,8 @@ inputs are computed with hashlib, independently of the circuit.
 
 With --check, execute those witnesses and the reject cases below against the
 circuit instead of writing them: every accept must solve, every reject must
-fail with its expected assertion.
+fail with its expected assertion. CHECK_JOBS (default 2) caps the
+noir-execute processes run at once.
 
 Usage: python3 -I scripts/telegram-fixture-witness.py [--check]
 """
@@ -15,6 +16,7 @@ import argparse
 import concurrent.futures
 import hashlib
 import json
+import os
 import pathlib
 import shutil
 import subprocess
@@ -231,7 +233,7 @@ def check(tmp: pathlib.Path, files: list[pathlib.Path]) -> int:
     cases = rejects()
     for name, (w, _) in cases.items():
         (tmp / f"reject-{name}.toml").write_text(toml(w, name))
-    with concurrent.futures.ThreadPoolExecutor() as pool:
+    with concurrent.futures.ThreadPoolExecutor(int(os.environ.get("CHECK_JOBS", "2"))) as pool:
         accepted = list(pool.map(run, files))
         rejected = list(pool.map(run, (tmp / f"reject-{name}.toml" for name in cases)))
     bad += [f"accept {p.name}: {out[-300:]}" for p, (ok, out) in zip(files, accepted) if not ok]
