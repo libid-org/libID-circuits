@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import functools
 import hashlib
 import json
 import pathlib
@@ -16,7 +17,9 @@ import sys
 
 sys.dont_write_bytecode = True
 import identity_table  # noqa: E402  (beside this script)
-from identity_table import DIGEST, D, E, N, b64url, hex_halves, pkcs1_sha256, redc, toml_array  # noqa: E402
+import oidc_fixture  # noqa: E402
+from identity_table import hex_halves, toml_array  # noqa: E402
+from oidc_fixture import DIGEST, D, N, b64url, pkcs1_sha256, redc  # noqa: E402
 
 SUB = "100000000000000000001"
 EMAIL = "Fixture@Example.com"
@@ -28,8 +31,8 @@ EXP = 1893456000
 SIGNING_INPUT_MAX = identity_table.integer("SIGNING_INPUT_MAX", identity_table.OIDC_GOOGLE)
 PAYLOAD_JSON_MAX = identity_table.integer("PAYLOAD_JSON_MAX", identity_table.OIDC_GOOGLE)
 AUDIENCE_MAX = identity_table.integer("AUDIENCE_MAX", identity_table.OIDC_GOOGLE)
-NUM_LIMBS = identity_table.integer("NUM_LIMBS", identity_table.OIDC_GOOGLE)
-MOD_BITS = identity_table.integer("MOD_BITS", identity_table.OIDC_GOOGLE)
+NUM_LIMBS, MOD_BITS = oidc_fixture.rsa_layout(identity_table.OIDC_GOOGLE)
+limbs = functools.partial(oidc_fixture.limbs, count=NUM_LIMBS)
 # lib/identity's generated Google constants.
 EMAIL_MAX = identity_table.integer("MAX_HANDLE_GOOGLE")
 SUB_MAX = identity_table.integer("MAX_ID_GOOGLE")
@@ -66,16 +69,11 @@ def compact_json(document: object) -> bytes:
     return json.dumps(dataclasses.asdict(document), separators=(",", ":")).encode()
 
 
-def limbs(value: int) -> list[str]:
-    return identity_table.limbs(value, NUM_LIMBS)
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--out", type=pathlib.Path, default=identity_table.OIDC_GOOGLE.parent.parent / "Prover.toml")
     args = parser.parse_args()
 
-    assert N.bit_length() == MOD_BITS and pow(pow(2, E, N), D, N) == 2
     nonce = b64url(DIGEST).decode()
     header = compact_json(Header())
     payload = compact_json(

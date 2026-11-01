@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Write circuits/oidc-telegram/Prover*.toml: Telegram-shaped ID tokens signed
-by the synthetic RSA-2048 key of scripts/identity_table.py. Public
+by the synthetic RSA-2048 key of scripts/oidc_fixture.py. Public
 inputs are computed with hashlib, independently of the circuit.
 
 With --check, execute those witnesses and the reject cases below against the
@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import functools
 import hashlib
 import json
 import os
@@ -26,12 +27,15 @@ import tempfile
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))  # -I drops it
 import identity_table as it  # noqa: E402
-from identity_table import DIGEST, D, N, b64url, pkcs1_sha256  # noqa: E402
+import oidc_fixture  # noqa: E402
+from oidc_fixture import DIGEST, D, N, b64url, pkcs1_sha256  # noqa: E402
 
 CIRCUIT = it.ROOT / "circuits" / "oidc-telegram"
 MAIN = CIRCUIT / "src" / "main.nr"
 ARTIFACT = CIRCUIT / "target" / "oidc_telegram.json"
-SIGNING_INPUT_MAX, NUM_LIMBS, MOD_BITS = (it.integer(k, MAIN) for k in ("SIGNING_INPUT_MAX", "NUM_LIMBS", "MOD_BITS"))
+SIGNING_INPUT_MAX = it.integer("SIGNING_INPUT_MAX", MAIN)
+NUM_LIMBS, MOD_BITS = oidc_fixture.rsa_layout(MAIN)
+limbs = functools.partial(oidc_fixture.limbs, count=NUM_LIMBS)
 # Each claim's window: whole payload groups from the one holding its offset.
 WINDOWS = {k: it.integer(f"{k.upper()}_WINDOW", MAIN) for k in ("iss", "aud", "iat", "id", "username", "nonce")}
 ID_TAG, HANDLE_TAG = it.byte_array("USER_ID_TAG_TELEGRAM"), it.byte_array("HANDLE_TAG_TELEGRAM")
@@ -67,10 +71,6 @@ def sha256_halves(data: bytes) -> list[str]:
     return it.hex_halves(hashlib.sha256(data).digest())
 
 
-def limbs(value: int) -> list[str]:
-    return it.limbs(value, NUM_LIMBS)
-
-
 def witness(c: dict, payload: bytes | None = None, **over) -> dict:
     """The circuit inputs for token `c` (or raw `payload`), then `over` replaced;
     each `<claim>_offset` in `over` moves that claim's window."""
@@ -85,7 +85,7 @@ def witness(c: dict, payload: bytes | None = None, **over) -> dict:
         iss_offset=at("iss"), aud_offset=at("aud"), audience_len=len(aud), iat_offset=at("iat"),
         iat_len=len(str(c["iat"])), id_offset=at("id"), id_len=len(uid), username_offset=at("preferred_username"),
         username_len=len(user), nonce_offset=at("nonce"),
-        signature=limbs(sig), redc=limbs(it.redc(N, MOD_BITS)),
+        signature=limbs(sig), redc=limbs(oidc_fixture.redc(N, MOD_BITS)),
         authorization_digest=list(DIGEST), audience_hash=sha256_halves(aud),
         id_node=sha256_halves(ID_TAG + uid), handle_node=sha256_halves(HANDLE_TAG + it.fold(user)), iat=int(c["iat"]),
         modulus=limbs(N),

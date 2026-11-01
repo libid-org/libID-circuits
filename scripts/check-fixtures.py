@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check the vendored fixtures against libID-contracts' ceremony session
 fixtures: fixtures/{x,github}-identity-link-witness.json hold the sessions'
-`identity_link_witness`, and scripts/identity_table.py's DIGEST is
+`identity_link_witness`, and scripts/oidc_fixture.py's DIGEST is
 their `authorization_digest`. CI runs it at the commit contracts.ref pins.
 
 Usage: scripts/check-fixtures.py <libID-contracts checkout>
@@ -17,6 +17,7 @@ import sys
 
 sys.dont_write_bytecode = True
 import identity_table  # noqa: E402  (beside this script)
+import oidc_fixture  # noqa: E402
 
 
 def sibling(name: str):
@@ -58,9 +59,9 @@ def main() -> int:
         if vendored.identity_link_witness != session.identity_link_witness:
             print(f"error: {vendored_path} differs from {session_path}'s identity_link_witness; copy it again", file=sys.stderr)
             failed = True
-        if session.authorization_digest != "0x" + identity_table.DIGEST.hex():
+        if session.authorization_digest != "0x" + oidc_fixture.DIGEST.hex():
             print(
-                f"error: scripts/identity_table.py's DIGEST differs from {session_path}'s "
+                f"error: scripts/oidc_fixture.py's DIGEST differs from {session_path}'s "
                 f"authorization_digest {session.authorization_digest}",
                 file=sys.stderr,
             )
