@@ -77,14 +77,15 @@ def witness(c: dict, payload: bytes | None = None, **over) -> dict:
     sig = pkcs1_sha256(si, N, D)
     at = lambda k: max(payload.find(f'"{k}":'.encode()), 1)  # noqa: E731  (a missing claim: 1)
     user, uid = str(c.get("preferred_username", "Brynn_QX")).encode(), str(c["id"]).encode()
+    aud = str(c["aud"]).encode()
     w = dict(
         signing_input=buf(si, SIGNING_INPUT_MAX), signing_input_len=len(si), header_b64_len=len(HEAD),
-        iss_offset=at("iss"), aud_offset=at("aud"), audience_len=len(AUD), iat_offset=at("iat"),
-        iat_len=len(str(IAT)), id_offset=at("id"), id_len=len(uid), username_offset=at("preferred_username"),
+        iss_offset=at("iss"), aud_offset=at("aud"), audience_len=len(aud), iat_offset=at("iat"),
+        iat_len=len(str(c["iat"])), id_offset=at("id"), id_len=len(uid), username_offset=at("preferred_username"),
         username_len=len(user), nonce_offset=at("nonce"),
         signature=limbs(sig), redc=limbs(it.redc(N, MOD_BITS)),
-        authorization_digest=list(DIGEST), audience_hash=sha256_halves(AUD.encode()),
-        id_node=sha256_halves(ID_TAG + uid), handle_node=sha256_halves(HANDLE_TAG + it.fold(user)), iat=IAT,
+        authorization_digest=list(DIGEST), audience_hash=sha256_halves(aud),
+        id_node=sha256_halves(ID_TAG + uid), handle_node=sha256_halves(HANDLE_TAG + it.fold(user)), iat=int(c["iat"]),
         modulus=limbs(N),
     )
     w.update(over)
@@ -117,6 +118,7 @@ def fill(c: dict, size: int) -> dict:
 
 def accepts() -> dict[str, tuple[dict, str]]:
     assert witness(worst())["signing_input_len"] <= SIGNING_INPUT_MAX
+    assert witness(claims(aud="1", iat=7))["audience_len"] == 1 == witness(claims(iat=7))["iat_len"]
     big = witness(fill(worst(), SIGNING_INPUT_MAX))
     assert big["signing_input_len"] == SIGNING_INPUT_MAX
     reordered = dict(reversed(claims(preferred_username="a-B4", id="01234567890123456789").items()))
@@ -198,7 +200,8 @@ def rejects() -> dict[str, tuple[dict, str]]:
                                   id_len=3, id_node=sha256_halves(ID_TAG + b"999")), PAT.format("id")),
         "id-prefix-unquoted": (raw(b'"id":"', b'"id": '), PAT.format("id")),
         "id-closed-by-quote": (raw(b'7051836294",', b'7051836294"",'), CLOSE.format("id")),
-        "aud-prefix": (witness(claims(aud=AUD + "x,y")), VALUE.format("aud")),
+        "aud-prefix": (witness(claims(aud=AUD + "x,y"), audience_len=len(AUD),
+                               audience_hash=sha256_halves(AUD.encode())), VALUE.format("aud")),
         "aud-empty": (witness(claims(aud=""), audience_len=0, audience_hash=sha256_halves(b"")), "aud is empty"),
         "aud-quote": (dict(raw(b'"aud":"7000000001"', b'"aud":"' + aud_q + b'"'), audience_len=len(aud_q),
                            audience_hash=sha256_halves(aud_q)), "aud byte not allowed"),
