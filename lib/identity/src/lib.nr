@@ -7,6 +7,7 @@ pub mod testing;
 mod tests;
 
 use sha256::sha256_var;
+use std::hash::sha256_compression;
 
 /// Blinder width of a tlsn hash commitment.
 pub global BLINDER_LEN: u32 = 16;
@@ -75,13 +76,56 @@ pub fn halves(digest: [u8; 32]) -> [Field; 2] {
     [high, low]
 }
 
-/// A node under a compiled tag, hashed over `TAG + MAX` bytes rather than
-/// `MAX_TAG_LEN + MAX`, so a short value keeps to fewer SHA-256 blocks.
-pub fn fixed_node_halves<let TAG: u32, let MAX: u32>(
-    tag: [u8; TAG],
-    value: [u8; MAX],
-    len: u32,
-) -> [Field; 2] {
+/// SHA-256's initial hash value (FIPS 180-4, 5.3.3).
+global SHA256_IV: [u32; 8] = [
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+];
+
+/// The longest message one SHA-256 block holds with its padding.
+pub global SHA256_BLOCK_MAX: u32 = 55;
+
+/// SHA-256 of `msg[0..len]` in one compression: the message, its 0x80 byte
+/// and its 64-bit bit length fill one block.
+pub fn sha256_block<let N: u32>(msg: [u8; N], len: u32) -> [u8; 32] {
+    std::static_assert(
+        N <= SHA256_BLOCK_MAX,
+        "message buffer longer than one SHA-256 block",
+    );
+    assert(len <= N, "message longer than its buffer");
+    let mut words: [u32; 16] = [0; 16];
+    // 1 while `i < len`.
+    let mut inside: Field = 1;
+    for w in 0..14 {
+        let mut word: Field = 0;
+        for k in 0..4 {
+            let i = 4 * w + k;
+            let end = (i == len) as Field;
+            inside -= end;
+            let byte = if i < N { msg[i] as Field * inside } else { 0 };
+            word = word * 256 + byte + 0x80 * end;
+        }
+        // Safety: `word` is four bytes, below 2^32; the assert pins the hint to it.
+        words[w] = unsafe { to_u32(word) };
+        assert(words[w] as Field == word);
+    }
+    words[15] = 8 * len;
+    let state = sha256_compression(words, SHA256_IV);
+    let mut out: [u8; 32] = [0; 32];
+    for j in 0..8 {
+        let bytes: [u8; 4] = (state[j] as Field).to_be_bytes();
+        for k in 0..4 {
+            out[4 * j + k] = bytes[k];
+        }
+    }
+    out
+}
+
+unconstrained fn to_u32(x: Field) -> u32 {
+    x as u32
+}
+
+/// `tag || value`, the preimage of a node under a compiled tag.
+fn tagged<let TAG: u32, let MAX: u32>(tag: [u8; TAG], value: [u8; MAX]) -> [u8; TAG + MAX] {
     let mut preimage: [u8; TAG + MAX] = [0; TAG + MAX];
     for i in 0..TAG {
         preimage[i] = tag[i];
@@ -89,8 +133,31 @@ pub fn fixed_node_halves<let TAG: u32, let MAX: u32>(
     for i in 0..MAX {
         preimage[TAG + i] = value[i];
     }
+    preimage
+}
+
+/// A node under a compiled tag, hashed over `TAG + MAX` bytes rather than
+/// `MAX_TAG_LEN + MAX`, so a short value keeps to fewer SHA-256 blocks.
+pub fn fixed_node_halves<let TAG: u32, let MAX: u32>(
+    tag: [u8; TAG],
+    value: [u8; MAX],
+    len: u32,
+) -> [Field; 2] {
+    let preimage = tagged(tag, value);
     assert(len <= MAX, "value longer than its buffer");
     halves(sha256_var(preimage, TAG + len))
+}
+
+/// `fixed_node_halves` in one SHA-256 compression, for `TAG + MAX` up to
+/// `SHA256_BLOCK_MAX` bytes.
+pub fn block_node_halves<let TAG: u32, let MAX: u32>(
+    tag: [u8; TAG],
+    value: [u8; MAX],
+    len: u32,
+) -> [Field; 2] {
+    let preimage = tagged(tag, value);
+    assert(len <= MAX, "value longer than its buffer");
+    halves(sha256_block(preimage, TAG + len))
 }
 
 /// `SHA256(tag[0..tag_len] || value[0..len])` as the public inputs carry it.

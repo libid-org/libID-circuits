@@ -1,10 +1,11 @@
 use bignum::params::BigNumParams;
 use bignum::RuntimeBigNum;
 use libid_identity::{
+    block_node_halves,
     check_id,
-    fixed_node_halves,
     fold_handle,
     halves,
+    sha256_block,
     table::{
         HANDLE_TAG_TELEGRAM, ID_DECIMAL_TELEGRAM, MAX_HANDLE_TELEGRAM, MAX_ID_TELEGRAM,
         USER_ID_TAG_TELEGRAM,
@@ -174,7 +175,7 @@ fn main(
     for i in 0..AUDIENCE_MAX {
         assert((audience[i] != 34) & (audience[i] != 92), "aud byte not allowed");
     }
-    assert(halves(sha256_var(audience, audience_len)) == audience_hash, "audience mismatch");
+    assert(halves(sha256_block(audience, audience_len)) == audience_hash, "audience mismatch");
 
     let iat_claim = payload.window("iat", iat_window, iat_offset);
     let start = iat_claim.pattern(IAT_PREFIX);
@@ -194,14 +195,14 @@ fn main(
     let id: [u8; MAX_ID_TELEGRAM] =
         payload.window("id", id_window, id_offset).string(ID_PREFIX, id_len);
     check_id(id, id_len, ID_DECIMAL_TELEGRAM);
-    assert(fixed_node_halves(USER_ID_TAG_TELEGRAM, id, id_len) == id_node, "id node mismatch");
+    assert(block_node_halves(USER_ID_TAG_TELEGRAM, id, id_len) == id_node, "id node mismatch");
 
     let username: [u8; MAX_HANDLE_TELEGRAM] = payload
         .window("username", username_window, username_offset)
         .string(USERNAME_PREFIX, username_len);
     let folded = fold_handle(username, username_len);
     assert(
-        fixed_node_halves(HANDLE_TAG_TELEGRAM, folded, username_len) == handle_node,
+        block_node_halves(HANDLE_TAG_TELEGRAM, folded, username_len) == handle_node,
         "handle node mismatch",
     );
 
@@ -226,6 +227,14 @@ fn each_window_holds_its_longest_claim_at_any_alignment() {
     ];
     for i in 0..6 {
         assert((widths[i] % 3 == 0) & (widths[i] >= needs[i] + 2));
+    }
+}
+
+#[test]
+fn the_audience_hash_is_sha256_at_its_shortest_and_longest() {
+    let audience: [u8; AUDIENCE_MAX] = [0x37; AUDIENCE_MAX];
+    for len in [1, AUDIENCE_MAX] {
+        assert(sha256_block(audience, len) == sha256_var(audience, len));
     }
 }
 
