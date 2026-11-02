@@ -162,21 +162,6 @@ jobs:
           ./scripts/build.sh --out "$RUNNER_TEMP/artifacts"
           find "$RUNNER_TEMP/artifacts" -type f -exec sha256sum {} +
 
-      # README.md's vk_hash table has one row per circuit, each the build's vk_hash.
-      - name: README vk_hash rows match the build
-        run: |
-          set -euo pipefail
-          rows=0
-          for dir in "$RUNNER_TEMP"/artifacts/*/; do
-            circuit="$(basename "$dir")"
-            want="0x$(od -An -tx1 -v "$dir/vk_hash" | tr -d ' \n')"
-            grep -qxF "| \`$circuit\` | \`$want\` |" README.md \
-              || { echo "::error::README.md's vk_hash row for $circuit is not $want"; exit 1; }
-            rows=$((rows + 1))
-          done
-          [ "$(grep -cE '^\| `[^`]+` \| `0x[0-9a-f]{64}` \|$' README.md)" -eq "$rows" ] \
-            || { echo "::error::README.md lists a vk_hash for a circuit the build does not produce"; exit 1; }
-
       # forge compiles the verifiers as a consumer does; anvil and cast run
       # them on chain.
       - uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1

@@ -227,10 +227,5 @@ tags, buffers and vectors from them instead of keeping a copy. oidc-google's
 and oidc-telegram's tags are compiled in; bearer-link takes its tags as public
 inputs, so the verifying contract must pass the tags `platforms.json` names.
 
-Verification keys under the pinned toolchain (nargo 1.0.0, bb 6.0.0):
-
-| Circuit | vk_hash |
-|---|---|
-| `bearer-link` | `0x0ae6b31e32fb572fb6c7de574ed92545dd6c4a81cc62a1d1be1a8c8e58e0e2a3` |
-| `oidc-google` | `0x24f940247d3108dacfc80e7e34b4a5efd0513a7c402a74565c20f099ec2aadba` |
-| `oidc-telegram` | `0x22433634ba45663381e63af155459b30823a084fa0a05443cd7bb829e5065607` |
+A circuit's `vk_hash` is in its tarball; `scripts/build.sh` writes the same
+file, so a local build under the manifest's toolchain reproduces it.
