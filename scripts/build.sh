@@ -26,8 +26,8 @@
 # and <out>/commit: the circuits commit built, with `-dirty` when the tree has
 # modified or untracked files, or `unknown` outside a readable git work tree.
 #
-# A circuit listed in MAX_LOG_SIZE fails the build when the log circuit size
-# its vk records exceeds its entry.
+# A circuit with a max_log_size fails the build when the log circuit size
+# its vk records exceeds it.
 #
 # The vk derives from the ACIR bytecode alone, and the Solidity verifier from
 # the vk alone — so a release tarball is the complete, sufficient input for
@@ -84,7 +84,7 @@ fi
 
 # Log2 of a circuit's largest allowed size: crossing a power of two doubles
 # proving time and memory.
-declare -A MAX_LOG_SIZE=([oidc-telegram]=18)
+max_log_size() { case "$1" in oidc-telegram) echo 18 ;; esac; }
 
 PLATFORMS="$ROOT/lib/identity/platforms.json"
 HANDLES="$ROOT/lib/identity/handles.json"
@@ -129,7 +129,8 @@ for dir in "$ROOT"/circuits/*/; do
   mv "$vk_tmp/vk_hash" "$OUT/$circuit/vk_hash"
   rmdir "$vk_tmp"
 
-  if [[ -n "${MAX_LOG_SIZE[$circuit]:-}" ]]; then
+  limit="$(max_log_size "$circuit")"
+  if [[ -n "$limit" ]]; then
     # The vk's first 32-byte field is the log circuit size.
     field="$(od -An -tx1 -v -N32 "$OUT/$circuit/vk" | tr -d ' \n')"
     if [[ ! "$field" =~ ^0{62}([0-9a-f]{2})$ ]]; then
@@ -137,11 +138,11 @@ for dir in "$ROOT"/circuits/*/; do
       exit 1
     fi
     log_size=$((16#${BASH_REMATCH[1]}))
-    if ((log_size > MAX_LOG_SIZE[$circuit])); then
-      echo "error: $circuit's circuit size is 2^$log_size, over its 2^${MAX_LOG_SIZE[$circuit]} limit." >&2
+    if ((log_size > limit)); then
+      echo "error: $circuit's circuit size is 2^$log_size, over its 2^$limit limit." >&2
       exit 1
     fi
-    echo "    circuit size 2^$log_size (limit 2^${MAX_LOG_SIZE[$circuit]})"
+    echo "    circuit size 2^$log_size (limit 2^$limit)"
   fi
 
   # The Solidity verifier, next to the vk it derives from. gen-verifier.sh
