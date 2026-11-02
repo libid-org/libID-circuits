@@ -1,11 +1,14 @@
 """The OIDC fixtures' synthetic signer: the nonce digest, a seeded RSA-2048
-key, RS256 signing and noir-bignum's limb encoding. The Google and Telegram
-witness scripts sign with it; scripts/check-fixtures.py reads DIGEST.
+key, the JOSE header, RS256 signing and noir-bignum's limb encoding. The
+Google and Telegram witness scripts sign with it; scripts/check-fixtures.py
+reads DIGEST.
 """
 from __future__ import annotations
 
 import base64
+import dataclasses
 import hashlib
+import json
 import pathlib
 
 import identity_table  # beside this script
@@ -44,6 +47,20 @@ D = int(
 
 if pow(pow(2, E, N), D, N) != 2:
     raise SystemExit("oidc_fixture.py: D is not the private exponent of (N, E)")
+
+
+@dataclasses.dataclass(frozen=True)
+class Header:
+    """An ID token's JOSE header."""
+
+    alg: str = "RS256"
+    kid: str = "libid-fixture"
+    typ: str = "JWT"
+
+
+def compact_json(document: object) -> bytes:
+    """A dataclass as the JSON a JWT segment carries: no spaces."""
+    return json.dumps(dataclasses.asdict(document), separators=(",", ":")).encode()
 
 
 def b64url(data: bytes) -> bytes:

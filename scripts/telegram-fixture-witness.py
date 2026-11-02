@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import dataclasses
 import functools
 import hashlib
 import json
@@ -28,7 +29,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))  # -I drops it
 import identity_table as it  # noqa: E402
 import oidc_fixture  # noqa: E402
-from oidc_fixture import DIGEST, D, N, b64url, pkcs1_sha256  # noqa: E402
+from oidc_fixture import DIGEST, D, N, Header, b64url, compact_json, pkcs1_sha256  # noqa: E402
 
 CIRCUIT = it.ROOT / "circuits" / "oidc-telegram"
 MAIN = CIRCUIT / "src" / "main.nr"
@@ -42,24 +43,67 @@ ID_TAG, HANDLE_TAG = it.byte_array("USER_ID_TAG_TELEGRAM"), it.byte_array("HANDL
 PUBLIC = [("authorization_digest", 32), ("audience_hash", 2), ("id_node", 2), ("handle_node", 2), ("iat", 1),
           ("modulus", NUM_LIMBS)]
 
-IAT, AUD = 1893452400, "7000000001"
-HEAD = b64url(json.dumps({"alg": "RS256", "kid": "oidc-1", "typ": "JWT"}, separators=(",", ":")).encode())
+IAT, AUD, USERNAME = 1893452400, "7000000001", "Brynn_QX"
+HEAD = b64url(compact_json(Header(kid="oidc-1")))
 NONCE = b64url(DIGEST).decode()
 
 
-def claims(**over) -> dict:
-    """Telegram's claims in Telegram's order; `None` drops one."""
-    c = dict(sub="zq-fixture-sub", aud=AUD, exp=IAT + 30, iat=IAT, iss="https://oauth.telegram.org",
-             name="Brynn Lowther", given_name="Brynn", family_name="Lowther",
-             picture="https://t.me/i/userpic/320/fixture.jpg", preferred_username="Brynn_QX",
-             id="7051836294", nonce=NONCE)
-    c.update(over)
-    return {k: v for k, v in c.items() if v is not None}
+@dataclasses.dataclass(frozen=True)
+class Claims:
+    """The ID token's claims, in the order Telegram writes them; `None` drops one."""
+
+    sub: str = "zq-fixture-sub"
+    aud: str = AUD
+    exp: int = IAT + 30
+    iat: int = IAT
+    iss: str = "https://oauth.telegram.org"
+    name: str = "Brynn Lowther"
+    given_name: str = "Brynn"
+    family_name: str = "Lowther"
+    picture: str = "https://t.me/i/userpic/320/fixture.jpg"
+    preferred_username: str | None = USERNAME
+    id: str = "7051836294"
+    nonce: str = NONCE
 
 
-def encode(c: dict) -> bytes:
-    """JSON as Telegram emits it: compact, non-ASCII as \\uXXXX, `/` as `\\/`."""
-    return json.dumps(c, separators=(",", ":")).replace("/", "\\/").encode()
+def encode(c: Claims, reverse: bool = False) -> bytes:
+    """JSON as Telegram emits it: compact, non-ASCII as \\uXXXX, `/` as `\\/`.
+    `reverse` writes the claims in reverse order."""
+    items = [(k, v) for k, v in dataclasses.asdict(c).items() if v is not None]
+    return json.dumps(dict(items[::-1] if reverse else items), separators=(",", ":")).replace("/", "\\/").encode()
+
+
+@dataclasses.dataclass(frozen=True)
+class Witness:
+    """The circuit's inputs, in Prover.toml's order."""
+
+    signing_input: list[int]
+    signing_input_len: int
+    header_b64_len: int
+    iss_offset: int
+    aud_offset: int
+    audience_len: int
+    iat_offset: int
+    iat_len: int
+    id_offset: int
+    id_len: int
+    username_offset: int
+    username_len: int
+    nonce_offset: int
+    signature: list[str]
+    redc: list[str]
+    authorization_digest: list[int]
+    audience_hash: list[str]
+    id_node: list[str]
+    handle_node: list[str]
+    iat: int
+    modulus: list[str]
+    iss_window: list[int] = dataclasses.field(default_factory=list)
+    aud_window: list[int] = dataclasses.field(default_factory=list)
+    iat_window: list[int] = dataclasses.field(default_factory=list)
+    id_window: list[int] = dataclasses.field(default_factory=list)
+    username_window: list[int] = dataclasses.field(default_factory=list)
+    nonce_window: list[int] = dataclasses.field(default_factory=list)
 
 
 def buf(value: bytes | list, size: int) -> list[int]:
@@ -71,63 +115,63 @@ def sha256_halves(data: bytes) -> list[str]:
     return it.hex_halves(hashlib.sha256(data).digest())
 
 
-def witness(c: dict, payload: bytes | None = None, **over) -> dict:
+def witness(c: Claims, payload: bytes | None = None, **over) -> Witness:
     """The circuit inputs for token `c` (or raw `payload`), then `over` replaced;
     each `<claim>_offset` in `over` moves that claim's window."""
     payload = encode(c) if payload is None else payload
     si = HEAD + b"." + b64url(payload)
     sig = pkcs1_sha256(si, N, D)
     at = lambda k: max(payload.find(f'"{k}":'.encode()), 1)  # noqa: E731  (a missing claim: 1)
-    user, uid = str(c.get("preferred_username", "Brynn_QX")).encode(), str(c["id"]).encode()
-    aud = str(c["aud"]).encode()
-    w = dict(
+    user = (USERNAME if c.preferred_username is None else c.preferred_username).encode()
+    uid, aud = c.id.encode(), c.aud.encode()
+    w = Witness(
         signing_input=buf(si, SIGNING_INPUT_MAX), signing_input_len=len(si), header_b64_len=len(HEAD),
         iss_offset=at("iss"), aud_offset=at("aud"), audience_len=len(aud), iat_offset=at("iat"),
-        iat_len=len(str(c["iat"])), id_offset=at("id"), id_len=len(uid), username_offset=at("preferred_username"),
+        iat_len=len(str(c.iat)), id_offset=at("id"), id_len=len(uid), username_offset=at("preferred_username"),
         username_len=len(user), nonce_offset=at("nonce"),
         signature=limbs(sig), redc=limbs(oidc_fixture.redc(N, MOD_BITS)),
         authorization_digest=list(DIGEST), audience_hash=sha256_halves(aud),
-        id_node=sha256_halves(ID_TAG + uid), handle_node=sha256_halves(HANDLE_TAG + it.fold(user)), iat=int(c["iat"]),
+        id_node=sha256_halves(ID_TAG + uid), handle_node=sha256_halves(HANDLE_TAG + it.fold(user)), iat=int(c.iat),
         modulus=limbs(N),
     )
-    w.update(over)
-    for k, size in WINDOWS.items():
-        g = w[f"{k}_offset"] // 3 * 3
-        w[f"{k}_window"] = buf(payload[g:g + size], size)
-    return w
+    w = dataclasses.replace(w, **over)
+    group = {k: getattr(w, f"{k}_offset") // 3 * 3 for k in WINDOWS}
+    return dataclasses.replace(w, **{f"{k}_window": buf(payload[group[k]:group[k] + size], size)
+                                     for k, size in WINDOWS.items()})
 
 
-def toml(w: dict, comment: str) -> str:
+def toml(w: Witness, comment: str) -> str:
     lines = [f"# Written by scripts/telegram-fixture-witness.py: {comment}"]
-    lines += [f"{k} = {it.toml_array(v)}" if isinstance(v, list) else f'{k} = "{v}"' for k, v in w.items()]
+    lines += [f"{k} = {it.toml_array(v)}" if isinstance(v, list) else f'{k} = "{v}"'
+              for k, v in dataclasses.asdict(w).items()]
     return "\n".join(lines) + "\n"
 
 
-def worst() -> dict:
+def worst() -> Claims:
     """The largest real token: a 20-digit sub, 64+64 \\uXXXX-escaped names,
     a 74-char userpic URL, a 32-byte username, a 20-digit id."""
     g, f = "Ж" * 64, "й" * 64
-    return claims(sub="9" * 20, name=f"{g} {f}", given_name=g, family_name=f,
+    return Claims(sub="9" * 20, name=f"{g} {f}", given_name=g, family_name=f,
                   picture="https://t.me/i/userpic/320/" + "P" * 43 + ".jpg", preferred_username="A" * 31 + "z",
                   id="9" * 20)
 
 
-def fill(c: dict, size: int) -> dict:
+def fill(c: Claims, size: int) -> Claims:
     """`c` with `picture` padded to a `size`-byte signing input."""
     pad = (size - len(HEAD) - 1) * 3 // 4 - len(encode(c))
-    return dict(c, picture=c["picture"] + "p" * pad)
+    return dataclasses.replace(c, picture=c.picture + "p" * pad)
 
 
-def accepts() -> dict[str, tuple[dict, str]]:
-    assert witness(worst())["signing_input_len"] <= SIGNING_INPUT_MAX
-    assert witness(claims(aud="1", iat=7))["audience_len"] == 1 == witness(claims(iat=7))["iat_len"]
+def accepts() -> dict[str, tuple[Witness, str]]:
+    assert witness(worst()).signing_input_len <= SIGNING_INPUT_MAX
+    assert witness(Claims(aud="1", iat=7)).audience_len == 1 == witness(Claims(iat=7)).iat_len
     big = witness(fill(worst(), SIGNING_INPUT_MAX))
-    assert big["signing_input_len"] == SIGNING_INPUT_MAX
-    reordered = dict(reversed(claims(preferred_username="a-B4", id="01234567890123456789").items()))
+    assert big.signing_input_len == SIGNING_INPUT_MAX
+    reordered = Claims(preferred_username="a-B4", id="01234567890123456789")
     return {
-        "Prover": (witness(claims()), "the short token; username Brynn_QX folds to brynn_qx."),
+        "Prover": (witness(Claims()), "the short token; username Brynn_QX folds to brynn_qx."),
         "Prover-max": (big, f"the largest real token padded to a {SIGNING_INPUT_MAX}-byte signing input."),
-        "Prover-reordered": (witness(reordered),
+        "Prover-reordered": (witness(reordered, encode(reordered, reverse=True)),
                              "claims reversed; a 4-byte username with '-', a 20-digit id with a leading zero."),
     }
 
@@ -139,28 +183,33 @@ WINDOW, LONG = "{} window does not match the signed input", "{} value longer tha
 RSA = "Failed to solve program: 'Cannot satisfy constraint'"
 
 
-def rejects() -> dict[str, tuple[dict, str]]:
+def rejects() -> dict[str, tuple[Witness, str]]:
     """Each reject and the assertion it must fail."""
-    base, s = witness(claims()), claims()
-    raw = lambda old, new: witness(s, encode(s).replace(old, new))  # noqa: E731
-    other = witness(claims(id="5000000002"))
-    with_id = lambda i: witness(claims(id=i))  # noqa: E731
-    with_user = lambda u: witness(claims(preferred_username=u))  # noqa: E731
-    forged = claims(name='Bob","id":"999')
-    forged_g = claims(given_name="Bob&quot;,&quot;id&quot;:&quot;999")
+    s = Claims()
+    base, rep = witness(s), dataclasses.replace
+    raw = lambda old, new, **over: witness(s, encode(s).replace(old, new), **over)  # noqa: E731
+    other = witness(Claims(id="5000000002"))
+    with_id = lambda i: witness(Claims(id=i))  # noqa: E731
+    with_user = lambda u: witness(Claims(preferred_username=u))  # noqa: E731
+    forged = Claims(name='Bob","id":"999')
+    forged_g = Claims(given_name="Bob&quot;,&quot;id&quot;:&quot;999")
     fp, fgp = encode(forged), encode(forged_g)
-    nouser = claims(preferred_username=None, name="Brynn_QX")
+    nouser = Claims(preferred_username=None, name="Brynn_QX")
     # The byte closing iss, which only the signature fixes, turned from ':' to ','.
     iss_key = raw(b'org",', b'org":')
-    iss_key["iss_window"][encode(s).index(b'org"') + 4 - iss_key["iss_offset"] // 3 * 3] = ord(",")
+    iss_window = list(iss_key.iss_window)
+    iss_window[encode(s).index(b'org"') + 4 - iss_key.iss_offset // 3 * 3] = ord(",")
     aud_q = b'7000000001","x":"y'
     user_q = b'Ali"ce_'
+    # A last claim `"uid":"999"`, whose suffix reads as `"id":"999"`.
+    uid = encode(s)[:-1] + b',"uid":"999"}'
     return {
-        "bad-signature": (dict(base, signature=limbs(pkcs1_sha256(b"x", N, D))), RSA),
-        "payload-not-signed": (dict(other, **{k: base[k] for k in ("signing_input", "signature")}), WINDOW.format("id")),
-        "iss-google": (witness(claims(iss="https://accounts.google.com")), PAT.format("iss")),
+        "bad-signature": (rep(base, signature=limbs(pkcs1_sha256(b"x", N, D))), RSA),
+        "payload-not-signed": (rep(other, signing_input=base.signing_input, signature=base.signature),
+                               WINDOW.format("id")),
+        "iss-google": (witness(Claims(iss="https://accounts.google.com")), PAT.format("iss")),
         "iss-unescaped": (raw(b"https:\\/\\/oauth", b"https://oauth"), PAT.format("iss")),
-        "iss-suffix": (witness(claims(iss="https://oauth.telegram.org.evil")), PAT.format("iss")),
+        "iss-suffix": (witness(Claims(iss="https://oauth.telegram.org.evil")), PAT.format("iss")),
         "id-forged-in-name": (witness(forged, id_offset=fp.index(b'\\"id') + 1, id_len=3,
                                       id_node=sha256_halves(ID_TAG + b"999")), PAT.format("id")),
         # Where `"id":"` starts once each &quot; reads as '"'.
@@ -169,52 +218,53 @@ def rejects() -> dict[str, tuple[dict, str]]:
         "username-missing": (witness(nouser, username_offset=encode(nouser).index(b'"name"')), PAT.format("username")),
         "username-empty": (with_user(""), "handle is empty"),
         "username-33": (with_user("A" * 33), LONG.format("username")),
-        "username-escape": (dict(with_user("alicé_tg"), username_len=13,
-                                 handle_node=sha256_halves(HANDLE_TAG + b"alic\\u00e9_tg")), "handle byte not allowed"),
-        "username-quote": (dict(raw(b'"Brynn_QX"', b'"' + user_q + b'"'), username_len=len(user_q),
-                                handle_node=sha256_halves(HANDLE_TAG + it.fold(user_q))), "handle byte not allowed"),
-        "username-len-short": (dict(base, username_len=7, handle_node=sha256_halves(HANDLE_TAG + b"alice_t")), VALUE.format("username")),
-        "handle-node-unfolded": (dict(base, handle_node=sha256_halves(HANDLE_TAG + b"Brynn_QX")),
+        "username-escape": (rep(with_user("alicé_tg"), username_len=13,
+                                handle_node=sha256_halves(HANDLE_TAG + b"alic\\u00e9_tg")), "handle byte not allowed"),
+        "username-quote": (rep(raw(b'"Brynn_QX"', b'"' + user_q + b'"'), username_len=len(user_q),
+                               handle_node=sha256_halves(HANDLE_TAG + it.fold(user_q))), "handle byte not allowed"),
+        "username-len-short": (rep(base, username_len=7, handle_node=sha256_halves(HANDLE_TAG + b"alice_t")),
+                               VALUE.format("username")),
+        "handle-node-unfolded": (rep(base, handle_node=sha256_halves(HANDLE_TAG + b"Brynn_QX")),
                                  "handle node mismatch"),
         "id-non-digit": (with_id("12a45"), "id byte not allowed"),
         "id-21-digits": (with_id("123456789012345678901"), LONG.format("id")),
-        "id-len-short": (dict(base, id_len=9, id_node=sha256_halves(ID_TAG + b"500000000")), VALUE.format("id")),
-        "id-node-other": (dict(base, id_node=sha256_halves(ID_TAG + b"5000000002")), "id node mismatch"),
-        "id-window-other": (dict(base, id_window=other["id_window"], id_node=other["id_node"]), WINDOW.format("id")),
-        "nonce-other-digest": (witness(claims(nonce=b64url(hashlib.sha256(DIGEST).digest()).decode())),
+        "id-len-short": (rep(base, id_len=9, id_node=sha256_halves(ID_TAG + b"500000000")), VALUE.format("id")),
+        "id-node-other": (rep(base, id_node=sha256_halves(ID_TAG + b"5000000002")), "id node mismatch"),
+        "id-window-other": (rep(base, id_window=other.id_window, id_node=other.id_node), WINDOW.format("id")),
+        "nonce-other-digest": (witness(Claims(nonce=b64url(hashlib.sha256(DIGEST).digest()).decode())),
                                "nonce does not encode the authorization digest"),
-        "nonce-44-chars": (witness(claims(nonce=NONCE + "A")), VALUE.format("nonce")),
-        "nonce-digest-other": (dict(base, authorization_digest=list(hashlib.sha256(DIGEST).digest())),
+        "nonce-44-chars": (witness(Claims(nonce=NONCE + "A")), VALUE.format("nonce")),
+        "nonce-digest-other": (rep(base, authorization_digest=list(hashlib.sha256(DIGEST).digest())),
                                "nonce does not encode the authorization digest"),
-        "iat-leading-zero": (dict(raw(f'"iat":{IAT}'.encode(), f'"iat":0{IAT}'.encode()), iat_len=len(str(IAT)) + 1),
+        "iat-leading-zero": (rep(raw(f'"iat":{IAT}'.encode(), f'"iat":0{IAT}'.encode()), iat_len=len(str(IAT)) + 1),
                              "leading zero in iat"),
-        "iat-quoted": (witness(claims(iat=str(IAT))), "iat byte not a digit"),
-        "iat-other": (dict(base, iat=IAT + 1), "iat mismatch"),
-        "aud-other": (dict(base, audience_hash=sha256_halves(b"7000000002")), "audience mismatch"),
+        "iat-quoted": (witness(Claims(iat=str(IAT))), "iat byte not a digit"),
+        "iat-other": (rep(base, iat=IAT + 1), "iat mismatch"),
+        "aud-other": (rep(base, audience_hash=sha256_halves(b"7000000002")), "audience mismatch"),
         "signing-input-over-max": (witness(fill(worst(), SIGNING_INPUT_MAX + 1)),
                                    "signing input longer than its buffer"),
-        "payload-not-after-dot": (dict(base, header_b64_len=base["header_b64_len"] + 4,
-                                       **{f"{k}_offset": base[f"{k}_offset"] - 3 for k in WINDOWS}),
+        "payload-not-after-dot": (rep(base, header_b64_len=base.header_b64_len + 4,
+                                      **{f"{k}_offset": getattr(base, f"{k}_offset") - 3 for k in WINDOWS}),
                                   "no '.' before the payload"),
-        "iss-close-unsigned": (iss_key, WINDOW.format("iss")),
+        "iss-close-unsigned": (rep(iss_key, iss_window=iss_window), WINDOW.format("iss")),
         "iss-as-key": (raw(b'org",', b'org":1,'), CLOSE.format("iss")),
-        "id-key-suffix": (witness(claims(uid="999"), id_offset=encode(claims(uid="999")).index(b'"uid"') + 1,
-                                  id_len=3, id_node=sha256_halves(ID_TAG + b"999")), PAT.format("id")),
+        "id-key-suffix": (witness(s, uid, id_offset=uid.index(b'"uid"') + 1, id_len=3,
+                                  id_node=sha256_halves(ID_TAG + b"999")), PAT.format("id")),
         "id-prefix-unquoted": (raw(b'"id":"', b'"id": '), PAT.format("id")),
         "id-closed-by-quote": (raw(b'7051836294",', b'7051836294"",'), CLOSE.format("id")),
-        "aud-prefix": (witness(claims(aud=AUD + "x,y"), audience_len=len(AUD),
+        "aud-prefix": (witness(Claims(aud=AUD + "x,y"), audience_len=len(AUD),
                                audience_hash=sha256_halves(AUD.encode())), VALUE.format("aud")),
-        "aud-empty": (witness(claims(aud=""), audience_len=0, audience_hash=sha256_halves(b"")), "aud is empty"),
-        "aud-quote": (dict(raw(b'"aud":"7000000001"', b'"aud":"' + aud_q + b'"'), audience_len=len(aud_q),
-                           audience_hash=sha256_halves(aud_q)), "aud byte not allowed"),
-        "aud-backslash": (witness(claims(aud="70\\01"), audience_len=6, audience_hash=sha256_halves(b"70\\\\01")),
+        "aud-empty": (witness(Claims(aud=""), audience_len=0, audience_hash=sha256_halves(b"")), "aud is empty"),
+        "aud-quote": (rep(raw(b'"aud":"7000000001"', b'"aud":"' + aud_q + b'"'), audience_len=len(aud_q),
+                          audience_hash=sha256_halves(aud_q)), "aud byte not allowed"),
+        "aud-backslash": (witness(Claims(aud="70\\01"), audience_len=6, audience_hash=sha256_halves(b"70\\\\01")),
                           "aud byte not allowed"),
-        "iat-empty": (dict(raw(f'"iat":{IAT}'.encode(), b'"iat":'), iat_len=0, iat=0), "iat length"),
-        "iat-13-digits": (dict(raw(f'"iat":{IAT}'.encode(), f'"iat":{IAT}123'.encode()), iat_len=13,
-                               iat=IAT * 100 + 12), "iat length"),
-        "iat-colon-digit": (dict(raw(f'"iat":{IAT}'.encode(), f'"iat":{IAT // 10}:'.encode()), iat=IAT + 10),
+        "iat-empty": (rep(raw(f'"iat":{IAT}'.encode(), b'"iat":'), iat_len=0, iat=0), "iat length"),
+        "iat-13-digits": (rep(raw(f'"iat":{IAT}'.encode(), f'"iat":{IAT}123'.encode()), iat_len=13,
+                              iat=IAT * 100 + 12), "iat length"),
+        "iat-colon-digit": (rep(raw(f'"iat":{IAT}'.encode(), f'"iat":{IAT // 10}:'.encode()), iat=IAT + 10),
                             "iat byte not a digit"),
-        "iat-len-short": (dict(base, iat_len=9, iat=IAT // 10), CLOSE.format("iat")),
+        "iat-len-short": (rep(base, iat_len=9, iat=IAT // 10), CLOSE.format("iat")),
     }
 
 

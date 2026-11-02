@@ -11,7 +11,6 @@ import argparse
 import dataclasses
 import functools
 import hashlib
-import json
 import pathlib
 import sys
 
@@ -19,7 +18,7 @@ sys.dont_write_bytecode = True
 import identity_table  # noqa: E402  (beside this script)
 import oidc_fixture  # noqa: E402
 from identity_table import hex_halves, toml_array  # noqa: E402
-from oidc_fixture import DIGEST, D, N, b64url, pkcs1_sha256, redc  # noqa: E402
+from oidc_fixture import DIGEST, D, N, Header, b64url, compact_json, pkcs1_sha256, redc  # noqa: E402
 
 SUB = "100000000000000000001"
 EMAIL = "Fixture@Example.com"
@@ -41,15 +40,6 @@ HANDLE_TAG = identity_table.byte_array("HANDLE_TAG_GOOGLE")
 
 
 @dataclasses.dataclass(frozen=True)
-class Header:
-    """The ID token's JOSE header."""
-
-    alg: str = "RS256"
-    kid: str = "libid-fixture"
-    typ: str = "JWT"
-
-
-@dataclasses.dataclass(frozen=True)
 class Claims:
     """The ID token's claims, in the order Google writes them."""
 
@@ -62,11 +52,6 @@ class Claims:
     nonce: str
     iat: int
     exp: int
-
-
-def compact_json(document: object) -> bytes:
-    """A dataclass as the JSON a JWT segment carries: no spaces."""
-    return json.dumps(dataclasses.asdict(document), separators=(",", ":")).encode()
 
 
 def main() -> int:
