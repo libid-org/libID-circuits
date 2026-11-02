@@ -179,6 +179,7 @@ def accepts() -> dict[str, tuple[Witness, str]]:
 # A claim window's assertions, named after its claim.
 PAT, VALUE, CLOSE = "{} claim pattern mismatch", "{} value not closed", "{} claim not followed by ',' or '}}'"
 WINDOW, LONG = "{} window does not match the signed input", "{} value longer than its buffer"
+WINDOW_START = "{} window starts outside the payload"
 # noir_rsa's check carries no message.
 RSA = "Failed to solve program: 'Cannot satisfy constraint'"
 
@@ -203,6 +204,9 @@ def rejects() -> dict[str, tuple[Witness, str]]:
     user_q = b'Ali"ce_'
     # A last claim `"uid":"999"`, whose suffix reads as `"id":"999"`.
     uid = encode(s)[:-1] + b',"uid":"999"}'
+    # Stray base64url characters signed after the payload, leaving it 1 mod 4 long.
+    si = HEAD + b"." + b64url(encode(s))
+    si += b"A" * ((len(HEAD) + 2 - len(si)) % 4)
     return {
         "bad-signature": (rep(base, signature=limbs(pkcs1_sha256(b"x", N, D))), RSA),
         "payload-not-signed": (rep(other, signing_input=base.signing_input, signature=base.signature),
@@ -246,6 +250,9 @@ def rejects() -> dict[str, tuple[Witness, str]]:
         "payload-not-after-dot": (rep(base, header_b64_len=base.header_b64_len + 4,
                                       **{f"{k}_offset": getattr(base, f"{k}_offset") - 3 for k in WINDOWS}),
                                   "no '.' before the payload"),
+        "payload-empty": (witness(s, b""), WINDOW_START.format("iss")),
+        "payload-length-1-mod-4": (rep(base, signing_input=buf(si, SIGNING_INPUT_MAX), signing_input_len=len(si),
+                                       signature=limbs(pkcs1_sha256(si, N, D))), "malformed base64url length"),
         "iss-close-unsigned": (rep(iss_key, iss_window=iss_window), WINDOW.format("iss")),
         "iss-as-key": (raw(b'org",', b'org":1,'), CLOSE.format("iss")),
         "id-key-suffix": (witness(s, uid, id_offset=uid.index(b'"uid"') + 1, id_len=3,

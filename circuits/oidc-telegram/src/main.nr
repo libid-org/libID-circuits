@@ -160,7 +160,6 @@ fn main(
     assert(verify_sha256_pkcs1v15(hash, sig, 65537));
 
     // The payload follows the only '.'; base64url has none.
-    assert(header_b64_len + 1 < signing_input_len, "no payload");
     assert(signing_input[header_b64_len] == 46, "no '.' before the payload");
     let p0 = header_b64_len + 1;
     let payload = Payload { signing_input, start: p0, b64_len: signing_input_len - p0 };
