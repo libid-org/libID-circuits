@@ -200,6 +200,12 @@ fn block_node_halves_agrees_with_fixed_node_halves() {
     }
 }
 
+#[test(should_fail_with = "value longer than its buffer")]
+fn block_node_halves_refuses_a_value_past_its_buffer() {
+    let id: [u8; table::MAX_ID_TELEGRAM] = [0x39; table::MAX_ID_TELEGRAM];
+    let _ = block_node_halves(table::USER_ID_TAG_TELEGRAM, id, table::MAX_ID_TELEGRAM + 1);
+}
+
 // --- sha256_block -----------------------------------------------------------
 
 #[test]
