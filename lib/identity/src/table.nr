@@ -6,7 +6,7 @@
 
 /// SHA-256 of the handles.json this file was generated from.
 pub global TABLE_SHA256: str<64> =
-    "eee46dfbd2fd2a776b69092453dff84203fa204015adbf41713963a9c8ca756e";
+    "b5c9cbb6ce91d973e8e9b3affb370746873b72ea678258cc009d96bc602afaf2";
 
 /// `libid.google.user-id`
 pub global USER_ID_TAG_GOOGLE: [u8; 20] = [
@@ -45,3 +45,17 @@ pub global HANDLE_TAG_GITHUB: [u8; 19] = [
 pub global MAX_HANDLE_GITHUB: u32 = 39;
 pub global MAX_ID_GITHUB: u32 = 20;
 pub global ID_DECIMAL_GITHUB: bool = true;
+
+/// `libid.telegram.user-id`
+pub global USER_ID_TAG_TELEGRAM: [u8; 22] = [
+    0x6c, 0x69, 0x62, 0x69, 0x64, 0x2e, 0x74, 0x65, 0x6c, 0x65, 0x67, 0x72, 0x61, 0x6d, 0x2e, 0x75,
+    0x73, 0x65, 0x72, 0x2d, 0x69, 0x64,
+];
+/// `libid.telegram.handle`
+pub global HANDLE_TAG_TELEGRAM: [u8; 21] = [
+    0x6c, 0x69, 0x62, 0x69, 0x64, 0x2e, 0x74, 0x65, 0x6c, 0x65, 0x67, 0x72, 0x61, 0x6d, 0x2e, 0x68,
+    0x61, 0x6e, 0x64, 0x6c, 0x65,
+];
+pub global MAX_HANDLE_TELEGRAM: u32 = 32;
+pub global MAX_ID_TELEGRAM: u32 = 20;
+pub global ID_DECIMAL_TELEGRAM: bool = true;

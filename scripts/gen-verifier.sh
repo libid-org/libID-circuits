@@ -7,7 +7,7 @@
 #   scripts/gen-verifier.sh <circuit> [<out.sol>] [--artifacts <dir>]
 #
 #   <circuit>          directory name under circuits/ and <artifacts>/
-#                      (bearer-link, oidc-google)
+#                      (bearer-link, oidc-google, oidc-telegram)
 #   <out.sol>          output path; default <artifacts>/<circuit>/<Contract>.sol,
 #                      next to the vk, which is the release layout
 #   --artifacts <dir>  where scripts/build.sh wrote (default ./artifacts);
@@ -51,6 +51,7 @@ source "$ROOT/toolchain.env"
 KNOWN_VERIFIERS=(
   bearer-link=BearerLinkHonkVerifier
   oidc-google=OidcGoogleHonkVerifier
+  oidc-telegram=OidcTelegramHonkVerifier
 )
 
 # bearer-link -> BearerLinkHonkVerifier

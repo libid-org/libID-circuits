@@ -108,9 +108,10 @@ jobs:
           for dir in artifacts/*/; do
             circuit="$(basename "$dir")"
             tarball="libid-circuits-${version}-${circuit}.tar.gz"
-            # Deterministic-ish tar: sorted names, no timestamps in gzip.
+            # Deterministic tar: sorted names, fixed owner, time and modes
+            # (independent of the runner's umask), no timestamps in gzip.
             tar --sort=name --owner=0 --group=0 --numeric-owner \
-              --mtime='UTC 2020-01-01' \
+              --mtime='UTC 2020-01-01' --mode='u+rwX,go+rX,go-w' \
               -C "$dir" -cf - . | gzip -n > "dist/$tarball"
 
             # sha256 of the tarball and of every file inside it.

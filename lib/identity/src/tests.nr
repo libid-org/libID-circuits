@@ -1,11 +1,12 @@
 // Tests of lib.nr. Expected hashes are Python hashlib's, not this library's.
 
 use crate::{
-    BLINDER_LEN, check_id, constrain_bearer, fixed_node_halves, fold_handle, hash_commit,
-    MAX_BEARER_LEN, MAX_HANDLE_BEARER_LINK, MAX_ID_BEARER_LINK, MAX_TAG_LEN, node_halves, table,
-    tag_of,
+    BLINDER_LEN, block_node_halves, check_id, constrain_bearer, fixed_node_halves, fold_handle,
+    hash_commit, MAX_BEARER_LEN, MAX_HANDLE_BEARER_LINK, MAX_ID_BEARER_LINK, MAX_TAG_LEN,
+    node_halves, sha256_block, SHA256_BLOCK_MAX, table, tag_of,
 };
 use crate::testing::{blinder, padded};
+use sha256::sha256_var;
 
 // --- constrain_bearer -------------------------------------------------------
 
@@ -178,6 +179,69 @@ fn fixed_node_halves_agrees_with_node_halves() {
         fixed_node_halves(table::HANDLE_TAG_GOOGLE, email, 19)
             == node_halves(handle_tag, handle_tag_len, email, 19),
     );
+}
+
+#[test]
+fn block_node_halves_agrees_with_fixed_node_halves() {
+    // oidc-telegram proves with block_node_halves; at its shortest and longest values.
+    let id: [u8; table::MAX_ID_TELEGRAM] = [0x39; table::MAX_ID_TELEGRAM];
+    let handle: [u8; table::MAX_HANDLE_TELEGRAM] = [0x61; table::MAX_HANDLE_TELEGRAM];
+    for len in [1, table::MAX_ID_TELEGRAM] {
+        assert(
+            block_node_halves(table::USER_ID_TAG_TELEGRAM, id, len)
+                == fixed_node_halves(table::USER_ID_TAG_TELEGRAM, id, len),
+        );
+    }
+    for len in [1, table::MAX_HANDLE_TELEGRAM] {
+        assert(
+            block_node_halves(table::HANDLE_TAG_TELEGRAM, handle, len)
+                == fixed_node_halves(table::HANDLE_TAG_TELEGRAM, handle, len),
+        );
+    }
+}
+
+#[test(should_fail_with = "value longer than its buffer")]
+fn block_node_halves_refuses_a_value_past_its_buffer() {
+    let id: [u8; table::MAX_ID_TELEGRAM] = [0x39; table::MAX_ID_TELEGRAM];
+    let _ = block_node_halves(table::USER_ID_TAG_TELEGRAM, id, table::MAX_ID_TELEGRAM + 1);
+}
+
+// --- sha256_block -----------------------------------------------------------
+
+#[test]
+fn sha256_block_matches_known_digests() {
+    // python3 -c "import hashlib; print(hashlib.sha256(b'abc').hexdigest())"
+    let abc: [u8; 3] = "abc".as_bytes();
+    let expected: [u8; 32] = [
+        0xba, 0x78, 0x16, 0xbf, 0x8f, 0x01, 0xcf, 0xea, 0x41, 0x41, 0x40, 0xde, 0x5d, 0xae, 0x22,
+        0x23, 0xb0, 0x03, 0x61, 0xa3, 0x96, 0x17, 0x7a, 0x9c, 0xb4, 0x10, 0xff, 0x61, 0xf2, 0x00,
+        0x15, 0xad,
+    ];
+    assert(sha256_block(abc, 3) == expected);
+    // python3 -c "import hashlib; print(hashlib.sha256(b'').hexdigest())"
+    let empty: [u8; 32] = [
+        0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14, 0x9a, 0xfb, 0xf4, 0xc8, 0x99, 0x6f, 0xb9,
+        0x24, 0x27, 0xae, 0x41, 0xe4, 0x64, 0x9b, 0x93, 0x4c, 0xa4, 0x95, 0x99, 0x1b, 0x78, 0x52,
+        0xb8, 0x55,
+    ];
+    assert(sha256_block(abc, 0) == empty);
+}
+
+#[test]
+fn sha256_block_agrees_with_sha256_var_at_every_length() {
+    // Nonzero bytes past `len`, which neither hash reads.
+    let mut msg: [u8; SHA256_BLOCK_MAX] = [0; SHA256_BLOCK_MAX];
+    for i in 0..SHA256_BLOCK_MAX {
+        msg[i] = 0xff - i as u8;
+    }
+    for len in 0..SHA256_BLOCK_MAX + 1 {
+        assert(sha256_block(msg, len) == sha256_var(msg, len));
+    }
+}
+
+#[test(should_fail_with = "message longer than its buffer")]
+fn sha256_block_refuses_a_length_past_its_buffer() {
+    let _ = sha256_block([0x61; 3], 4);
 }
 
 // --- Tags -------------------------------------------------------------------

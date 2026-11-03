@@ -205,6 +205,25 @@
       "input": "a\\b@example.com",
       "error": "BadCharacter",
       "note": "A backslash is refused."
+    },
+    {
+      "platform": "telegram",
+      "input": "Brynn_QX",
+      "output": "brynn_qx",
+      "handleNode": "0xf6416e7788cea1d8d9d7ada243b2f998a33296b61db647298ce61722c04c925b",
+      "note": "The Telegram fixture's username."
+    },
+    {
+      "platform": "telegram",
+      "input": "Abcdefghij_bcdefghij_bcdefghij12",
+      "output": "abcdefghij_bcdefghij_bcdefghij12",
+      "handleNode": "0x91bff6c0f0be28b117c4f2be2a2d56eeaf552dc8a40263b0de71a590514b5904",
+      "note": "32 bytes is the buffer."
+    },
+    {
+      "platform": "telegram",
+      "input": "Abcdefghij_bcdefghij_bcdefghij123",
+      "error": "TooLong"
     }
   ],
   "idVectors": [
@@ -324,6 +343,23 @@
       "platform": "google",
       "input": "a\tb",
       "error": "BadCharacter"
+    },
+    {
+      "platform": "telegram",
+      "input": "7051836294",
+      "idNode": "0x9ff44e615ff14505c3a406e9931e2442ad4f56f3fb5b12e91c143fa6384a3a4c",
+      "note": "The Telegram fixture's id."
+    },
+    {
+      "platform": "telegram",
+      "input": "12345678901234567890",
+      "idNode": "0x3e9826f14cbe508759feac1b5cff121bfa0d9a805167f0ff9e5395d8bef3deb1",
+      "note": "20 digits is the buffer."
+    },
+    {
+      "platform": "telegram",
+      "input": "123456789012345678901",
+      "error": "TooLong"
     }
   ]
 }

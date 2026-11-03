@@ -39,6 +39,15 @@
       "maxId": 20,
       "idShape": "decimal",
       "note": "The handle is the login, at most 39 bytes. The id is a JSON number of digits."
+    },
+    {
+      "platform": "telegram",
+      "userIdTag": "libid.telegram.user-id",
+      "handleTag": "libid.telegram.handle",
+      "maxHandle": 32,
+      "maxId": 20,
+      "idShape": "decimal",
+      "note": "The handle is `preferred_username`, the id the `id` claim: a JSON string of digits."
     }
   ]
 }

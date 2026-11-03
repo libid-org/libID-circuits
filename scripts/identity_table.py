@@ -122,6 +122,10 @@ def halves(digest: bytes) -> tuple[int, int]:
     return int.from_bytes(digest[:16], "big"), int.from_bytes(digest[16:], "big")
 
 
+def hex_halves(digest: bytes) -> list[str]:
+    return [f"0x{half:032x}" for half in halves(digest)]
+
+
 def padded(name: str, value: bytes, size: int) -> list[int]:
     """`value` in a `size`-byte circuit buffer, the tail zero."""
     if len(value) > size:
